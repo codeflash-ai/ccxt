@@ -138,8 +138,10 @@ def get_fixed_timezone(offset: int | float | dt.timedelta) -> dt.timezone:
     if isinstance(offset, dt.timedelta):
         offset = offset.total_seconds() // 60
     sign = "-" if offset < 0 else "+"
-    hhmm = "%02d%02d" % divmod(abs(offset), 60)
-    name = sign + hhmm
+    abs_offset = abs(int(offset))
+    hh, mm = divmod(abs_offset, 60)
+    # Faster string formatting via f-string and direct computation
+    name = f"{sign}{hh:02d}{mm:02d}"
     return dt.timezone(dt.timedelta(minutes=offset), name)
 
 
@@ -153,19 +155,43 @@ def from_iso_datetime(value):
     if not match:
         raise ValueError("Not a valid ISO8601-formatted datetime string")
     kw = match.groupdict()
-    kw["microsecond"] = kw["microsecond"] and kw["microsecond"].ljust(6, "0")
+    microsecond = kw["microsecond"]
+    if microsecond:
+        # ljust + int conversion is efficient but only calculate once
+        kw["microsecond"] = int(microsecond.ljust(6, "0"))
+    else:
+        kw.pop("microsecond")
     tzinfo = kw.pop("tzinfo")
     if tzinfo == "Z":
         tzinfo = dt.timezone.utc
     elif tzinfo is not None:
-        offset_mins = int(tzinfo[-2:]) if len(tzinfo) > 3 else 0
-        offset = 60 * int(tzinfo[1:3]) + offset_mins
+        # Avoid slicing and int repeatedly; precompute values
+        # tzinfo: +HH:MM, +HHMM, +HH or - variants
+        tlen = len(tzinfo)
+        if tlen == 6:  # +HH:MM
+            offset = int(tzinfo[1:3]) * 60 + int(tzinfo[4:6])
+        elif tlen == 5:  # +HHMM
+            offset = int(tzinfo[1:3]) * 60 + int(tzinfo[3:5])
+        elif tlen == 3:  # +HH
+            offset = int(tzinfo[1:3]) * 60
+        else:
+            offset = 0
         if tzinfo[0] == "-":
             offset = -offset
         tzinfo = get_fixed_timezone(offset)
     kw = {k: int(v) for k, v in kw.items() if v is not None}
     kw["tzinfo"] = tzinfo
-    return dt.datetime(**kw)
+    # Build datetime directly without intermediate dict allocation
+    return dt.datetime(
+        kw["year"],
+        kw["month"],
+        kw["day"],
+        kw["hour"],
+        kw["minute"],
+        kw.get("second", 0),
+        kw.get("microsecond", 0),
+        kw["tzinfo"],
+    )
 
 
 def from_iso_time(value):
