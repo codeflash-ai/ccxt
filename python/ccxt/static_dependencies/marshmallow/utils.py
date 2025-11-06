@@ -176,10 +176,15 @@ def from_iso_time(value):
     match = _iso8601_time_re.match(value)
     if not match:
         raise ValueError("Not a valid ISO8601-formatted time string")
-    kw = match.groupdict()
-    kw["microsecond"] = kw["microsecond"] and kw["microsecond"].ljust(6, "0")
-    kw = {k: int(v) for k, v in kw.items() if v is not None}
-    return dt.time(**kw)
+    groups = match.groups()
+    hour = int(groups[0])
+    minute = int(groups[1])
+    second = int(groups[2]) if groups[2] is not None else 0
+    if groups[3] is not None:
+        microsecond = int(groups[3].ljust(6, "0"))
+    else:
+        microsecond = 0
+    return dt.time(hour, minute, second, microsecond)
 
 
 def from_iso_date(value):
