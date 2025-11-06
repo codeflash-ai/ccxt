@@ -2374,6 +2374,14 @@ class Exchange(object):
         safely extract a dictionary from dictionary or list
         :returns dict | None:
         """
+        # Fast-path for most common case: simple dict, single key
+        if isinstance(dictionary, dict) and key in dictionary:
+            value = dictionary[key]
+            if isinstance(value, dict) and not isinstance(value, list):
+                return value
+            else:
+                return defaultValue
+        # Fall back to the original multi-key logic
         return self.safe_dict_n(dictionary, [key], defaultValue)
 
     def safe_dict_2(self, dictionary, key1: IndexType, key2: str, defaultValue: dict = None):
@@ -6034,8 +6042,14 @@ class Exchange(object):
         return self.precisionMode == SIGNIFICANT_DIGITS
 
     def safe_number(self, obj, key: IndexType, defaultNumber: Num = None):
-        value = self.safe_string(obj, key)
-        return self.parse_number(value, defaultNumber)
+        # Fast inline version, to avoid extra function calls
+        value = obj[key] if isinstance(obj, dict) and key in obj else None
+        if value is None:
+            return defaultNumber
+        try:
+            return self.number(value)
+        except Exception:
+            return defaultNumber
 
     def safe_number_n(self, obj: object, arr: List[IndexType], defaultNumber: Num = None):
         value = self.safe_string_n(obj, arr)
