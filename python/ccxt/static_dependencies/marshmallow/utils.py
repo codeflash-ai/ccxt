@@ -201,7 +201,9 @@ def from_timestamp(value: typing.Any) -> dt.datetime:
     # Load a timestamp with utc as timezone to prevent using system timezone.
     # Then set timezone to None, to let the Field handle adding timezone info.
     try:
-        return dt.datetime.fromtimestamp(value, tz=dt.timezone.utc).replace(tzinfo=None)
+        # dt.datetime.utcfromtimestamp is faster than dt.datetime.fromtimestamp with tz=dt.timezone.utc,
+        # and produces a naive datetime in UTC, matching 'replace(tzinfo=None)'.
+        return dt.datetime.utcfromtimestamp(value)
     except OverflowError as exc:
         raise ValueError("Timestamp is too large") from exc
     except OSError as exc:
