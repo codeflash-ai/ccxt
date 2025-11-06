@@ -523,13 +523,27 @@ class woofipro(Exchange, ImplicitAPI):
         marketId = self.safe_string(market, 'symbol')
         parts = marketId.split('_')
         marketType = 'swap'
-        baseId = self.safe_string(parts, 1)
-        quoteId = self.safe_string(parts, 2)
+        baseId = parts[1] if len(parts) > 1 else None
+        quoteId = parts[2] if len(parts) > 2 else None
+        settleId: Str = parts[2] if len(parts) > 2 else None
+
+        # Reduce redundant lookups by calling once and caching
         base = self.safe_currency_code(baseId)
         quote = self.safe_currency_code(quoteId)
-        settleId: Str = self.safe_string(parts, 2)
         settle: Str = self.safe_currency_code(settleId)
         symbol = base + '/' + quote + ':' + settle
+
+        # Compute numbers up-front to avoid method indirection in dict:
+        precision_amount = self.safe_number(market, 'base_tick')
+        precision_price = self.safe_number(market, 'quote_tick')
+        limits_amount_min = self.safe_number(market, 'base_min')
+        limits_amount_max = self.safe_number(market, 'base_max')
+        limits_price_min = self.safe_number(market, 'quote_min')
+        limits_price_max = self.safe_number(market, 'quote_max')
+        limits_cost_min = self.safe_number(market, 'min_notional')
+        contract_size = self.parse_number('1')
+        created_time = self.safe_integer(market, 'created_time')
+
         return {
             'id': marketId,
             'symbol': symbol,
@@ -549,14 +563,14 @@ class woofipro(Exchange, ImplicitAPI):
             'contract': True,
             'linear': True,
             'inverse': False,
-            'contractSize': self.parse_number('1'),
+            'contractSize': contract_size,
             'expiry': None,
             'expiryDatetime': None,
             'strike': None,
             'optionType': None,
             'precision': {
-                'amount': self.safe_number(market, 'base_tick'),
-                'price': self.safe_number(market, 'quote_tick'),
+                'amount': precision_amount,
+                'price': precision_price,
             },
             'limits': {
                 'leverage': {
@@ -564,19 +578,19 @@ class woofipro(Exchange, ImplicitAPI):
                     'max': None,
                 },
                 'amount': {
-                    'min': self.safe_number(market, 'base_min'),
-                    'max': self.safe_number(market, 'base_max'),
+                    'min': limits_amount_min,
+                    'max': limits_amount_max,
                 },
                 'price': {
-                    'min': self.safe_number(market, 'quote_min'),
-                    'max': self.safe_number(market, 'quote_max'),
+                    'min': limits_price_min,
+                    'max': limits_price_max,
                 },
                 'cost': {
-                    'min': self.safe_number(market, 'min_notional'),
+                    'min': limits_cost_min,
                     'max': None,
                 },
             },
-            'created': self.safe_integer(market, 'created_time'),
+            'created': created_time,
             'info': market,
         }
 
