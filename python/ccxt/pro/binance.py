@@ -2754,13 +2754,11 @@ class binance(ccxt.async_support.binance):
         client.resolve(self.balance[accountType], messageHash)
 
     def get_account_type_from_subscriptions(self, subscriptions: List[str]) -> str:
-        accountType = ''
-        for i in range(0, len(subscriptions)):
-            subscription = subscriptions[i]
-            if (subscription == 'spot') or (subscription == 'margin') or (subscription == 'future') or (subscription == 'delivery'):
-                accountType = subscription
-                break
-        return accountType
+        allowed = {'spot', 'margin', 'future', 'delivery'}
+        for subscription in subscriptions:
+            if subscription in allowed:
+                return subscription
+        return ''
 
     def get_market_type(self, method, market, params={}):
         type = None
