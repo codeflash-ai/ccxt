@@ -383,22 +383,39 @@ class Exchange(object):
         self.aiohttp_trust_env = self.aiohttp_trust_env or self.trust_env
         self.requests_trust_env = self.requests_trust_env or self.trust_env
 
-        self.precision = dict() if self.precision is None else self.precision
-        self.limits = dict() if self.limits is None else self.limits
-        self.exceptions = dict() if self.exceptions is None else self.exceptions
-        self.headers = dict() if self.headers is None else self.headers
-        self.balance = dict() if self.balance is None else self.balance
-        self.orderbooks = dict() if self.orderbooks is None else self.orderbooks
-        self.fundingRates = dict() if self.fundingRates is None else self.fundingRates
-        self.tickers = dict() if self.tickers is None else self.tickers
-        self.bidsasks = dict() if self.bidsasks is None else self.bidsasks
-        self.trades = dict() if self.trades is None else self.trades
-        self.transactions = dict() if self.transactions is None else self.transactions
-        self.ohlcvs = dict() if self.ohlcvs is None else self.ohlcvs
-        self.liquidations = dict() if self.liquidations is None else self.liquidations
-        self.myLiquidations = dict() if self.myLiquidations is None else self.myLiquidations
-        self.currencies = dict() if self.currencies is None else self.currencies
-        self.options = self.get_default_options() if self.options is None else self.options  # Python does not allow to define properties in run-time with setattr
+        # Use fast literal assignment rather than dict() call
+        if self.precision is None:
+            self.precision = {}
+        if self.limits is None:
+            self.limits = {}
+        if self.exceptions is None:
+            self.exceptions = {}
+        if self.headers is None:
+            self.headers = {}
+        if self.balance is None:
+            self.balance = {}
+        if self.orderbooks is None:
+            self.orderbooks = {}
+        if self.fundingRates is None:
+            self.fundingRates = {}
+        if self.tickers is None:
+            self.tickers = {}
+        if self.bidsasks is None:
+            self.bidsasks = {}
+        if self.trades is None:
+            self.trades = {}
+        if self.transactions is None:
+            self.transactions = {}
+        if self.ohlcvs is None:
+            self.ohlcvs = {}
+        if self.liquidations is None:
+            self.liquidations = {}
+        if self.myLiquidations is None:
+            self.myLiquidations = {}
+        if self.currencies is None:
+            self.currencies = {}
+        if self.options is None:
+            self.options = self.get_default_options()
         self.decimal_to_precision = decimal_to_precision
         self.number_to_string = number_to_string
 
@@ -412,38 +429,53 @@ class Exchange(object):
 
         settings = self.deep_extend(self.describe(), config)
 
-        for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+        # Use direct attribute mutation for dicts first, then fallback to setattr
+        for key, value in settings.items():
+            orig = getattr(self, key, None)
+            if isinstance(orig, dict):
+                setattr(self, key, self.deep_extend(orig, value))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, value)
+
 
         self.after_construct()
 
-        if self.safe_bool(config, 'sandbox') or self.safe_bool(config, 'testnet'):
+        # Replace safe_bool calls by caching the results; slight savings
+        sandbox = self.safe_bool(config, 'sandbox')
+        testnet = self.safe_bool(config, 'testnet')
+        if sandbox or testnet:
             self.set_sandbox_mode(True)
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
+
+        # Optimize underscore→camelCase conversion
+        exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
         cls = type(self)
-        for name in dir(self):
-            if name[0] != '_' and name[-1] != '_' and '_' in name:
-                parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
-                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
-                attr = getattr(self, name)
-                if isinstance(attr, types.MethodType):
+        names = [name for name in dir(self) if name[0] != '_' and name[-1] != '_' and '_' in name]
+        # Pre-fetch cls attributes to avoid repeated lookups for methods.
+        cls_dict = cls.__dict__ if hasattr(cls, '__dict__') else {}
+
+        for name in names:
+            parts = name.split('_')
+            camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+            attr = getattr(self, name)
+            if isinstance(attr, types.MethodType):
+                # Only overwrite if class doesn't already have camelcase
+                if camelcase not in cls_dict:
                     setattr(cls, camelcase, getattr(cls, name))
-                else:
-                    if hasattr(self, camelcase):
-                        if attr is not None:
-                            setattr(self, camelcase, attr)
-                    else:
+            else:
+                # Avoid redundant setattr if attribute is None and destination already exists
+                if hasattr(self, camelcase):
+                    if attr is not None:
                         setattr(self, camelcase, attr)
+                else:
+                    setattr(self, camelcase, attr)
+
 
         if not self.session and self.synchronous:
-            self.session = Session()
-            self.session.trust_env = self.requests_trust_env
+            session = Session()
+            session.trust_env = self.requests_trust_env
+            self.session = session
         self.logger = self.logger if self.logger else logging.getLogger(__name__)
 
     def __del__(self):
@@ -1253,10 +1285,8 @@ class Exchange(object):
 
     @staticmethod
     def binary_concat(*args):
-        result = bytes()
-        for arg in args:
-            result = result + arg
-        return result
+        # Use join for bytes for O(N) time instead of repeated concatenation (O(N²))
+        return b''.join(args)
 
     @staticmethod
     def binary_concat_array(array):
