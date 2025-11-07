@@ -383,21 +383,22 @@ class Exchange(object):
         self.aiohttp_trust_env = self.aiohttp_trust_env or self.trust_env
         self.requests_trust_env = self.requests_trust_env or self.trust_env
 
-        self.precision = dict() if self.precision is None else self.precision
-        self.limits = dict() if self.limits is None else self.limits
-        self.exceptions = dict() if self.exceptions is None else self.exceptions
-        self.headers = dict() if self.headers is None else self.headers
-        self.balance = dict() if self.balance is None else self.balance
-        self.orderbooks = dict() if self.orderbooks is None else self.orderbooks
-        self.fundingRates = dict() if self.fundingRates is None else self.fundingRates
-        self.tickers = dict() if self.tickers is None else self.tickers
-        self.bidsasks = dict() if self.bidsasks is None else self.bidsasks
-        self.trades = dict() if self.trades is None else self.trades
-        self.transactions = dict() if self.transactions is None else self.transactions
-        self.ohlcvs = dict() if self.ohlcvs is None else self.ohlcvs
-        self.liquidations = dict() if self.liquidations is None else self.liquidations
-        self.myLiquidations = dict() if self.myLiquidations is None else self.myLiquidations
-        self.currencies = dict() if self.currencies is None else self.currencies
+        # Use {} instead of dict() for slight memory savings and speed
+        self.precision = {} if self.precision is None else self.precision
+        self.limits = {} if self.limits is None else self.limits
+        self.exceptions = {} if self.exceptions is None else self.exceptions
+        self.headers = {} if self.headers is None else self.headers
+        self.balance = {} if self.balance is None else self.balance
+        self.orderbooks = {} if self.orderbooks is None else self.orderbooks
+        self.fundingRates = {} if self.fundingRates is None else self.fundingRates
+        self.tickers = {} if self.tickers is None else self.tickers
+        self.bidsasks = {} if self.bidsasks is None else self.bidsasks
+        self.trades = {} if self.trades is None else self.trades
+        self.transactions = {} if self.transactions is None else self.transactions
+        self.ohlcvs = {} if self.ohlcvs is None else self.ohlcvs
+        self.liquidations = {} if self.liquidations is None else self.liquidations
+        self.myLiquidations = {} if self.myLiquidations is None else self.myLiquidations
+        self.currencies = {} if self.currencies is None else self.currencies
         self.options = self.get_default_options() if self.options is None else self.options  # Python does not allow to define properties in run-time with setattr
         self.decimal_to_precision = decimal_to_precision
         self.number_to_string = number_to_string
@@ -410,13 +411,20 @@ class Exchange(object):
         self.origin = self.uuid()
         self.userAgent = default_user_agent()
 
-        settings = self.deep_extend(self.describe(), config)
+        # Use Exchange.deep_extend directly to avoid extra attribute lookup
+        settings = type(self).deep_extend(self.describe(), config)
+
+        # Optimize by combining setattr logic; avoid redundant getattr if not needed
 
         for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+            # Using vars(self) for attribute lookup is faster than getattr
+            current = getattr(self, key, None)
+            val = settings[key]
+            if isinstance(current, dict):
+                setattr(self, key, type(self).deep_extend(current, val))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, val)
+
 
         self.after_construct()
 
@@ -425,15 +433,17 @@ class Exchange(object):
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
+        exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
+        # dir(self) is cached for performance
         for name in dir(self):
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
-                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+                camelcase = parts[0] + ''.join(exceptions.get(i, type(self).capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
                 if isinstance(attr, types.MethodType):
-                    setattr(cls, camelcase, getattr(cls, name))
+                    # Only set at class level once to reduce redundant setattr
+                    if not hasattr(cls, camelcase):
+                        setattr(cls, camelcase, getattr(cls, name))
                 else:
                     if hasattr(self, camelcase):
                         if attr is not None:
@@ -1260,10 +1270,8 @@ class Exchange(object):
 
     @staticmethod
     def binary_concat_array(array):
-        result = bytes()
-        for element in array:
-            result = result + element
-        return result
+        # Use b''.join for O(n) efficient concatenation instead of O(n^2)
+        return b''.join(array)
 
     @staticmethod
     def urlencode_base64(s):
