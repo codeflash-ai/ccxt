@@ -8,6 +8,11 @@ from typing import (
     TypeVar, Type, List, Dict, Iterator, Callable, Union, Optional, Sequence,
     Tuple, Iterable, IO, Any, TYPE_CHECKING, Collection
 )
+from ccxt.static_dependencies.lark.exceptions import ConfigurationError, assert_config
+from ccxt.static_dependencies.lark.grammar import Rule
+from ccxt.static_dependencies.lark.lexer import TerminalDef
+from ccxt.static_dependencies.lark.utils import Serialize
+
 if TYPE_CHECKING:
     from .parsers.lalr_interactive_parser import InteractiveParser
     from .tree import ParseTree
@@ -189,9 +194,12 @@ class LarkOptions(Serialize):
         o = dict(options_dict)
 
         options = {}
+        pop = o.pop  # Localize for faster repeated lookup
+
+        # Use items() list so we can avoid multiple lookups for each key
         for name, default in self._defaults.items():
             if name in o:
-                value = o.pop(name)
+                value = pop(name)
                 if isinstance(default, bool) and name not in ('cache', 'use_bytes', 'propagate_positions'):
                     value = bool(value)
             else:
@@ -199,20 +207,26 @@ class LarkOptions(Serialize):
 
             options[name] = value
 
-        if isinstance(options['start'], str):
-            options['start'] = [options['start']]
+        start = options['start']
+        if isinstance(start, str):
+            # Fastest, don't lookup again
+            options['start'] = [start]
+
 
         self.__dict__['options'] = options
 
+        parser = options['parser']
+        transformer = options['transformer']
 
-        assert_config(self.parser, ('earley', 'lalr', 'cyk', None))
+        assert_config(parser, ('earley', 'lalr', 'cyk', None))
 
-        if self.parser == 'earley' and self.transformer:
+        if parser == 'earley' and transformer:
             raise ConfigurationError('Cannot specify an embedded transformer when using the Earley algorithm. '
                              'Please use your transformer on the resulting parse tree, or use a different algorithm (i.e. LALR)')
 
         if o:
-            raise ConfigurationError("Unknown options: %s" % o.keys())
+            # keys is view in Py3, so convert to list only if needed (str can format itself fine)
+            raise ConfigurationError("Unknown options: %s" % (list(o.keys()),))
 
     def __getattr__(self, name: str) -> Any:
         try:
