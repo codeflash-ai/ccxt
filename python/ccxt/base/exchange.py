@@ -127,6 +127,11 @@ import urllib.parse as _urlencode
 from typing import Any, List
 from ccxt.base.types import Int
 
+_PARSE8601_REGEX = re.compile(
+    r"([0-9]{4})-?([0-9]{2})-?([0-9]{2})(?:T|[\s])?([0-9]{2}):?([0-9]{2}):?([0-9]{2})(\.[0-9]{1,3})?(?:(\+|\-)([0-9]{2}):?([0-9]{2})|Z)?",
+    re.IGNORECASE
+)
+
 # -----------------------------------------------------------------------------
 
 class SafeJSONEncoder(json.JSONEncoder):
@@ -428,7 +433,7 @@ class Exchange(object):
         for name in dir(self):
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
+                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
                 exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
                 camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
@@ -1199,17 +1204,8 @@ class Exchange(object):
     def parse8601(timestamp=None):
         if timestamp is None:
             return timestamp
-        yyyy = '([0-9]{4})-?'
-        mm = '([0-9]{2})-?'
-        dd = '([0-9]{2})(?:T|[\\s])?'
-        h = '([0-9]{2}):?'
-        m = '([0-9]{2}):?'
-        s = '([0-9]{2})'
-        ms = '(\\.[0-9]{1,3})?'
-        tz = '(?:(\\+|\\-)([0-9]{2})\\:?([0-9]{2})|Z)?'
-        regex = r'' + yyyy + mm + dd + h + m + s + ms + tz
         try:
-            match = re.search(regex, timestamp, re.IGNORECASE)
+            match = _PARSE8601_REGEX.search(timestamp)
             if match is None:
                 return None
             yyyy, mm, dd, h, m, s, ms, sign, hours, minutes = match.groups()
