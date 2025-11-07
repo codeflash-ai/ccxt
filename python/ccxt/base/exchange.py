@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """Base exchange class"""
+from functools import lru_cache
 
 # -----------------------------------------------------------------------------
 
@@ -1005,8 +1006,11 @@ class Exchange(object):
         return not object
 
     @staticmethod
+    @lru_cache(maxsize=128)
     def extract_params(string):
-        return re.findall(r'{([\w-]+)}', string)
+        # Pre-compile the regex pattern for efficiency (with lru_cache, pattern is reused)
+        pattern = re.compile(r'{([\w-]+)}')
+        return pattern.findall(string)
 
     @staticmethod
     def implode_params(string, params):
