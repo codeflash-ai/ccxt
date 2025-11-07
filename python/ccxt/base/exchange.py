@@ -380,25 +380,30 @@ class Exchange(object):
     synchronous = True
 
     def __init__(self, config: ConstructorArgs = {}):
-        self.aiohttp_trust_env = self.aiohttp_trust_env or self.trust_env
-        self.requests_trust_env = self.requests_trust_env or self.trust_env
+        # Short-circuit lookup of trust_env values to only apply if not already set
+        if not getattr(self, "aiohttp_trust_env", False):
+            self.aiohttp_trust_env = getattr(self, "trust_env", False)
+        if not getattr(self, "requests_trust_env", False):
+            self.requests_trust_env = getattr(self, "trust_env", False)
 
-        self.precision = dict() if self.precision is None else self.precision
-        self.limits = dict() if self.limits is None else self.limits
-        self.exceptions = dict() if self.exceptions is None else self.exceptions
-        self.headers = dict() if self.headers is None else self.headers
-        self.balance = dict() if self.balance is None else self.balance
-        self.orderbooks = dict() if self.orderbooks is None else self.orderbooks
-        self.fundingRates = dict() if self.fundingRates is None else self.fundingRates
-        self.tickers = dict() if self.tickers is None else self.tickers
-        self.bidsasks = dict() if self.bidsasks is None else self.bidsasks
-        self.trades = dict() if self.trades is None else self.trades
-        self.transactions = dict() if self.transactions is None else self.transactions
-        self.ohlcvs = dict() if self.ohlcvs is None else self.ohlcvs
-        self.liquidations = dict() if self.liquidations is None else self.liquidations
-        self.myLiquidations = dict() if self.myLiquidations is None else self.myLiquidations
-        self.currencies = dict() if self.currencies is None else self.currencies
-        self.options = self.get_default_options() if self.options is None else self.options  # Python does not allow to define properties in run-time with setattr
+        # Avoid double dict copy if instance already has a dict
+        self.precision = self.precision if getattr(self, "precision", None) is not None else {}
+        self.limits = self.limits if getattr(self, "limits", None) is not None else {}
+        self.exceptions = self.exceptions if getattr(self, "exceptions", None) is not None else {}
+        self.headers = self.headers if getattr(self, "headers", None) is not None else {}
+        self.balance = self.balance if getattr(self, "balance", None) is not None else {}
+        self.orderbooks = self.orderbooks if getattr(self, "orderbooks", None) is not None else {}
+        self.fundingRates = self.fundingRates if getattr(self, "fundingRates", None) is not None else {}
+        self.tickers = self.tickers if getattr(self, "tickers", None) is not None else {}
+        self.bidsasks = self.bidsasks if getattr(self, "bidsasks", None) is not None else {}
+        self.trades = self.trades if getattr(self, "trades", None) is not None else {}
+        self.transactions = self.transactions if getattr(self, "transactions", None) is not None else {}
+        self.ohlcvs = self.ohlcvs if getattr(self, "ohlcvs", None) is not None else {}
+        self.liquidations = self.liquidations if getattr(self, "liquidations", None) is not None else {}
+        self.myLiquidations = self.myLiquidations if getattr(self, "myLiquidations", None) is not None else {}
+        self.currencies = self.currencies if getattr(self, "currencies", None) is not None else {}
+        # Only get_default_options() when necessary
+        self.options = self.options if getattr(self, "options", None) is not None else self.get_default_options()
         self.decimal_to_precision = decimal_to_precision
         self.number_to_string = number_to_string
 
@@ -412,39 +417,62 @@ class Exchange(object):
 
         settings = self.deep_extend(self.describe(), config)
 
-        for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+        # Direct dict update when possible for efficiency
+        for key, value in settings.items():
+            current_attr = getattr(self, key, None)
+            if isinstance(current_attr, dict) and isinstance(value, dict):
+                setattr(self, key, self.deep_extend(current_attr, value))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, value)
+
 
         self.after_construct()
 
-        if self.safe_bool(config, 'sandbox') or self.safe_bool(config, 'testnet'):
+        # Optimize hashtable and short-circuit evaluation for sandbox/testnet
+        if ('sandbox' in config and self.safe_bool(config, 'sandbox')) or ('testnet' in config and self.safe_bool(config, 'testnet')):
             self.set_sandbox_mode(True)
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
+        processed_class_attrs = set()
+        # Set class method (types.MethodType) camelCase only once per class
+        for name in dir(cls):
+            if (
+                name[0] != '_' and name[-1] != '_' and '_' in name
+                and isinstance(getattr(cls, name, None), types.FunctionType)
+            ):
+                parts = name.split('_')
+                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
+                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+                if not hasattr(cls, camelcase):
+                    setattr(cls, camelcase, getattr(cls, name))
+                processed_class_attrs.add(camelcase)
+        # Set instance-level non-methods
         for name in dir(self):
-            if name[0] != '_' and name[-1] != '_' and '_' in name:
+            if (
+                name[0] != '_' and name[-1] != '_' and '_' in name
+                and not callable(getattr(self, name))
+            ):
                 parts = name.split('_')
                 # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
                 exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
                 camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
-                if isinstance(attr, types.MethodType):
-                    setattr(cls, camelcase, getattr(cls, name))
-                else:
-                    if hasattr(self, camelcase):
-                        if attr is not None:
-                            setattr(self, camelcase, attr)
-                    else:
+                if hasattr(self, camelcase):
+                    if attr is not None:
                         setattr(self, camelcase, attr)
+                elif camelcase not in processed_class_attrs:
+                    setattr(self, camelcase, attr)
 
-        if not self.session and self.synchronous:
+        # Create requests session if needed, skipping unnecessary check for trust_env
+        if getattr(self, "session", None) is None and getattr(self, "synchronous", False):
             self.session = Session()
             self.session.trust_env = self.requests_trust_env
-        self.logger = self.logger if self.logger else logging.getLogger(__name__)
+
+        if getattr(self, "logger", None):
+            self.logger = self.logger
+        else:
+            self.logger = logging.getLogger(__name__)
 
     def __del__(self):
         if self.session:
@@ -946,7 +974,7 @@ class Exchange(object):
     @staticmethod
     def filter_by(array, key, value=None):
         array = Exchange.to_array(array)
-        return list(filter(lambda x: x[key] == value, array))
+        return [x for x in array if x[key] == value]
 
     @staticmethod
     def filterBy(array, key, value=None):
@@ -1567,7 +1595,8 @@ class Exchange(object):
 
     @staticmethod
     def to_array(value):
-        return list(value.values()) if type(value) is dict else value
+        # Use isinstance(value, dict) for correct subclass handling
+        return list(value.values()) if isinstance(value, dict) else value
 
     @staticmethod
     def check_required_version(required_version, error=True):
