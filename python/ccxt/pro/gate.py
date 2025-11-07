@@ -1822,12 +1822,10 @@ class gate(ccxt.async_support.gate):
             'delivery': 'future',
             'fx': 'swap',
         }
-        keys = list(findBy.keys())
-        for i in range(0, len(keys)):
-            key = keys[i]
-            value = findBy[key]
+        keys = ('op-', 'delivery', 'fx')
+        for key in keys:
             if url.find(key) >= 0:
-                return value
+                return findBy[key]
         return 'spot'
 
     def request_id(self):
