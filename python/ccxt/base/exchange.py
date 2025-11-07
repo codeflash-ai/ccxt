@@ -127,6 +127,18 @@ import urllib.parse as _urlencode
 from typing import Any, List
 from ccxt.base.types import Int
 
+_PARSE8601_REGEX = re.compile(
+    r'([0-9]{4})-?'        # yyyy
+    r'([0-9]{2})-?'        # mm
+    r'([0-9]{2})(?:T|[\s])?'  # dd
+    r'([0-9]{2}):?'        # h
+    r'([0-9]{2}):?'        # m
+    r'([0-9]{2})'          # s
+    r'(\.[0-9]{1,3})?'     # ms
+    r'(?:(\+|\-)([0-9]{2})\:?([0-9]{2})|Z)?',  # tz
+    re.IGNORECASE
+)
+
 # -----------------------------------------------------------------------------
 
 class SafeJSONEncoder(json.JSONEncoder):
@@ -1187,7 +1199,19 @@ class Exchange(object):
             return None
         if 'GMT' in timestamp:
             try:
-                string = ''.join([str(value).zfill(2) for value in parsedate(timestamp)[:6]]) + '.000Z'
+                # Avoid list comprehension, benefit marginal here; keep for clarity.
+                values = parsedate(timestamp)
+                # Profiler shows this is hot - but parsedate is needed, can't be removed.
+                # join logic can be slightly quicker for fixed size:
+                string = (
+                    str(values[0]).zfill(2) +
+                    str(values[1]).zfill(2) +
+                    str(values[2]).zfill(2) +
+                    str(values[3]).zfill(2) +
+                    str(values[4]).zfill(2) +
+                    str(values[5]).zfill(2) +
+                    '.000Z'
+                )
                 dt = datetime.datetime.strptime(string, "%Y%m%d%H%M%S.%fZ")
                 return calendar.timegm(dt.utctimetuple()) * 1000
             except (TypeError, OverflowError, OSError):
@@ -1199,29 +1223,27 @@ class Exchange(object):
     def parse8601(timestamp=None):
         if timestamp is None:
             return timestamp
-        yyyy = '([0-9]{4})-?'
-        mm = '([0-9]{2})-?'
-        dd = '([0-9]{2})(?:T|[\\s])?'
-        h = '([0-9]{2}):?'
-        m = '([0-9]{2}):?'
-        s = '([0-9]{2})'
-        ms = '(\\.[0-9]{1,3})?'
-        tz = '(?:(\\+|\\-)([0-9]{2})\\:?([0-9]{2})|Z)?'
-        regex = r'' + yyyy + mm + dd + h + m + s + ms + tz
+        # Use precompiled regex pattern instead of rebuilding every call.
+        match = _PARSE8601_REGEX.search(timestamp)
+        if match is None:
+            return None
+        yyyy, mm, dd, h, m, s, ms, sign, hours, minutes = match.groups()
+        ms = ms or '.000'
+        ms = (ms + '00')[0:4]
+        msint = int(ms[1:])
+        sign = sign or ''
+        # Instead of int(sign + '1') * -1, do fewer string operations:
+        # This also reduces allocation and is clearer:
+        sign_int = -1
+        if sign == '+':
+            sign_int = -1
+        elif sign == '-':
+            sign_int = 1
+        hours = int(hours or 0) * sign_int
+        minutes = int(minutes or 0) * sign_int
+        offset = datetime.timedelta(hours=hours, minutes=minutes)
+        string = f"{yyyy}{mm}{dd}{h}{m}{s}{ms}Z"
         try:
-            match = re.search(regex, timestamp, re.IGNORECASE)
-            if match is None:
-                return None
-            yyyy, mm, dd, h, m, s, ms, sign, hours, minutes = match.groups()
-            ms = ms or '.000'
-            ms = (ms + '00')[0:4]
-            msint = int(ms[1:])
-            sign = sign or ''
-            sign = int(sign + '1') * -1
-            hours = int(hours or 0) * sign
-            minutes = int(minutes or 0) * sign
-            offset = datetime.timedelta(hours=hours, minutes=minutes)
-            string = yyyy + mm + dd + h + m + s + ms + 'Z'
             dt = datetime.datetime.strptime(string, "%Y%m%d%H%M%S.%fZ")
             dt = dt + offset
             return calendar.timegm(dt.utctimetuple()) * 1000 + msint
