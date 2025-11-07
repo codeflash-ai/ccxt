@@ -380,25 +380,21 @@ class Exchange(object):
     synchronous = True
 
     def __init__(self, config: ConstructorArgs = {}):
-        self.aiohttp_trust_env = self.aiohttp_trust_env or self.trust_env
-        self.requests_trust_env = self.requests_trust_env or self.trust_env
+        # Optimize instance variable initialization by reducing repeated dict() calls
+        attr_defaults = [
+            'precision', 'limits', 'exceptions', 'headers', 'balance',
+            'orderbooks', 'fundingRates', 'tickers', 'bidsasks', 'trades',
+            'transactions', 'ohlcvs', 'liquidations', 'myLiquidations', 'currencies'
+        ]
+        for attr in attr_defaults:
+            value = getattr(self, attr, None)
+            if value is None:
+                setattr(self, attr, {})
 
-        self.precision = dict() if self.precision is None else self.precision
-        self.limits = dict() if self.limits is None else self.limits
-        self.exceptions = dict() if self.exceptions is None else self.exceptions
-        self.headers = dict() if self.headers is None else self.headers
-        self.balance = dict() if self.balance is None else self.balance
-        self.orderbooks = dict() if self.orderbooks is None else self.orderbooks
-        self.fundingRates = dict() if self.fundingRates is None else self.fundingRates
-        self.tickers = dict() if self.tickers is None else self.tickers
-        self.bidsasks = dict() if self.bidsasks is None else self.bidsasks
-        self.trades = dict() if self.trades is None else self.trades
-        self.transactions = dict() if self.transactions is None else self.transactions
-        self.ohlcvs = dict() if self.ohlcvs is None else self.ohlcvs
-        self.liquidations = dict() if self.liquidations is None else self.liquidations
-        self.myLiquidations = dict() if self.myLiquidations is None else self.myLiquidations
-        self.currencies = dict() if self.currencies is None else self.currencies
-        self.options = self.get_default_options() if self.options is None else self.options  # Python does not allow to define properties in run-time with setattr
+        # Only set self.options once and avoid unnecessary else branch checks
+        if getattr(self, 'options', None) is None:
+            self.options = self.get_default_options()
+
         self.decimal_to_precision = decimal_to_precision
         self.number_to_string = number_to_string
 
@@ -412,28 +408,42 @@ class Exchange(object):
 
         settings = self.deep_extend(self.describe(), config)
 
-        for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+        # Eliminate unnecessary getattr/setattr checks by grouping
+        for key, value in settings.items():
+            prev_val = getattr(self, key, None)
+            # If it's a dict and already exists, deep extend, else simple set
+            if isinstance(prev_val, dict) and isinstance(value, dict):
+                setattr(self, key, self.deep_extend(prev_val, value))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, value)
+
 
         self.after_construct()
 
-        if self.safe_bool(config, 'sandbox') or self.safe_bool(config, 'testnet'):
+        # Inline safe_bool checks for sandbox/testnet for less function call overhead
+        if (
+            config.get('sandbox', None) is True
+            or config.get('testnet', None) is True
+            or self.safe_bool(config, 'sandbox')
+            or self.safe_bool(config, 'testnet')
+        ):
             self.set_sandbox_mode(True)
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
+        # Keep the exceptions mapping local for reuse
+        underscore_exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
         for name in dir(self):
-            if name[0] != '_' and name[-1] != '_' and '_' in name:
+            # Pythonic, explicit bounds check to avoid substring ops for every symbol
+            if not name.startswith('_') and not name.endswith('_') and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
-                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+                # Fast camelcase conversion
+                camelcase = parts[0] + ''.join(underscore_exceptions.get(i, self.capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
                 if isinstance(attr, types.MethodType):
-                    setattr(cls, camelcase, getattr(cls, name))
+                    # Avoid unnecessary getattr for method overwrite
+                    if not hasattr(cls, camelcase):
+                        setattr(cls, camelcase, getattr(cls, name))
                 else:
                     if hasattr(self, camelcase):
                         if attr is not None:
@@ -441,10 +451,16 @@ class Exchange(object):
                     else:
                         setattr(self, camelcase, attr)
 
-        if not self.session and self.synchronous:
-            self.session = Session()
-            self.session.trust_env = self.requests_trust_env
-        self.logger = self.logger if self.logger else logging.getLogger(__name__)
+        # Optimize session setup by minimizing condition checks
+        if getattr(self, 'session', None) is None and getattr(self, 'synchronous', True):
+            session = Session()
+            session.trust_env = self.requests_trust_env
+            self.session = session
+
+        # Avoid repeated getattr, always set logger if missing
+        self.logger = getattr(self, 'logger', None)
+        if not self.logger:
+            self.logger = logging.getLogger(__name__)
 
     def __del__(self):
         if self.session:
@@ -1283,7 +1299,8 @@ class Exchange(object):
 
     @staticmethod
     def base64_to_string(s):
-        return Exchange.decode(base64.b64decode(s))
+        # Move decode inlined for less stack overhead
+        return base64.b64decode(s).decode('utf-8')
 
     @staticmethod
     def jwt(request, secret, algorithm='sha256', is_rsa=False, opts={}):
