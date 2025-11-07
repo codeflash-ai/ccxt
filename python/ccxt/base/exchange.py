@@ -425,7 +425,8 @@ class Exchange(object):
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
-        for name in dir(self):
+        dir_self = dir(self)
+        for name in dir_self:
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
                 # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
@@ -5893,19 +5894,23 @@ class Exchange(object):
         raise ExchangeError(self.id + ' does not have currency code ' + code)
 
     def market(self, symbol: str):
-        if self.markets is None:
+        # Optimize for common case: symbol lookup in self.markets, then self.markets_by_id
+        markets = self.markets
+        if markets is None:
             raise ExchangeError(self.id + ' markets not loaded')
-        if symbol in self.markets:
-            return self.markets[symbol]
-        elif symbol in self.markets_by_id:
-            markets = self.markets_by_id[symbol]
+        if symbol in markets:
+            return markets[symbol]
+        markets_by_id = self.markets_by_id
+        if symbol in markets_by_id:
+            mlist = markets_by_id[symbol]
             defaultType = self.safe_string_2(self.options, 'defaultType', 'defaultSubType', 'spot')
-            for i in range(0, len(markets)):
-                market = markets[i]
+            for i in range(0, len(mlist)):
+                market = mlist[i]
+                # Use local variable to reduce repeated key lookup
                 if market[defaultType]:
                     return market
-            return markets[0]
-        elif (symbol.endswith('-C')) or (symbol.endswith('-P')) or (symbol.startswith('C-')) or (symbol.startswith('P-')):
+            return mlist[0]
+        if (symbol.endswith('-C')) or (symbol.endswith('-P')) or (symbol.startswith('C-')) or (symbol.startswith('P-')):
             return self.create_expired_option_market(symbol)
         raise BadSymbol(self.id + ' does not have market symbol ' + symbol)
 

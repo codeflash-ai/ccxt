@@ -379,22 +379,36 @@ class gate(ccxt.async_support.gate):
         """
         await self.load_markets()
         market = self.market(symbol)
-        symbol = market['symbol']
-        marketId = market['id']
+        symbol_val = market['symbol']
+        market_id = market['id']
+        is_contract = market['contract']
+        type_val = (
+            'spot' if market.get('spot', False)
+            else 'options' if market.get('option', False)
+            else 'futures'
+        )
+
+        # The hot logic from handle_option_and_params is retained for correctness
         interval, query = self.handle_option_and_params(params, 'watchOrderBook', 'interval', '100ms')
-        messageType = self.get_type_by_market(market)
-        channel = messageType + '.order_book_update'
-        messageHash = 'orderbook' + ':' + symbol
-        url = self.get_url_by_market(market)
-        payload = [marketId, interval]
-        if limit is None:
-            limit = 100  # max 100 atm
-        if market['contract']:
-            stringLimit = str(limit)
+        channel = f"{type_val}.order_book_update"
+        messageHash = f"orderbook:{symbol_val}"
+
+        # Optimize url/molookup
+        urls_api = self.urls['api']
+        mtype = market['type']
+        baseUrl = urls_api[mtype]
+        url = baseUrl['usdt'] if is_contract and market['linear'] else baseUrl['btc'] if is_contract else baseUrl
+
+        # Prepare payload efficiently
+        payload = [market_id, interval]
+        # If limit is not provided, set it to 100 (max value atm)
+        lim = limit if limit is not None else 100
+        if is_contract:
+            stringLimit = str(lim)
             payload.append(stringLimit)
         subscription: dict = {
-            'symbol': symbol,
-            'limit': limit,
+            'symbol': symbol_val,
+            'limit': lim,
         }
         orderbook = await self.subscribe_public(url, messageHash, payload, channel, query, subscription)
         return orderbook.limit()
@@ -1848,11 +1862,12 @@ class gate(ccxt.async_support.gate):
         }
         if subscription is not None:
             client = self.client(url)
-            if not (messageHash in client.subscriptions):
+            client_subs = client.subscriptions
+            if not (messageHash in client_subs):
                 tempSubscriptionHash = str(requestId)
-                client.subscriptions[tempSubscriptionHash] = messageHash
-        message = self.extend(request, params)
-        return await self.watch(url, messageHash, message, messageHash, subscription)
+                client_subs[tempSubscriptionHash] = messageHash
+        # Use .extend as in base, but optimize to avoid redundant variable
+        return await self.watch(url, messageHash, self.extend(request, params), messageHash, subscription)
 
     async def subscribe_public_multiple(self, url, messageHashes, payload, channel, params={}):
         requestId = self.request_id()
