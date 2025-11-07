@@ -425,21 +425,22 @@ class Exchange(object):
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
-        for name in dir(self):
-            if name[0] != '_' and name[-1] != '_' and '_' in name:
-                parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
-                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
-                attr = getattr(self, name)
-                if isinstance(attr, types.MethodType):
-                    setattr(cls, camelcase, getattr(cls, name))
-                else:
-                    if hasattr(self, camelcase):
-                        if attr is not None:
-                            setattr(self, camelcase, attr)
-                    else:
+        exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
+        # Pre-filter names to avoid repeated string operations
+        names = [name for name in dir(self) if name[0] != '_' and name[-1] != '_' and '_' in name]
+        for name in names:
+            parts = name.split('_')
+            # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
+            camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+            attr = getattr(self, name)
+            if isinstance(attr, types.MethodType):
+                setattr(cls, camelcase, getattr(cls, name))
+            else:
+                if hasattr(self, camelcase):
+                    if attr is not None:
                         setattr(self, camelcase, attr)
+                else:
+                    setattr(self, camelcase, attr)
 
         if not self.session and self.synchronous:
             self.session = Session()
