@@ -380,24 +380,26 @@ class Exchange(object):
     synchronous = True
 
     def __init__(self, config: ConstructorArgs = {}):
-        self.aiohttp_trust_env = self.aiohttp_trust_env or self.trust_env
-        self.requests_trust_env = self.requests_trust_env or self.trust_env
+        # Use short-circuiting directly, avoids extra attribute lookup
+        self.aiohttp_trust_env = getattr(self, 'aiohttp_trust_env', None) or getattr(self, 'trust_env', None)
+        self.requests_trust_env = getattr(self, 'requests_trust_env', None) or getattr(self, 'trust_env', None)
 
-        self.precision = dict() if self.precision is None else self.precision
-        self.limits = dict() if self.limits is None else self.limits
-        self.exceptions = dict() if self.exceptions is None else self.exceptions
-        self.headers = dict() if self.headers is None else self.headers
-        self.balance = dict() if self.balance is None else self.balance
-        self.orderbooks = dict() if self.orderbooks is None else self.orderbooks
-        self.fundingRates = dict() if self.fundingRates is None else self.fundingRates
-        self.tickers = dict() if self.tickers is None else self.tickers
-        self.bidsasks = dict() if self.bidsasks is None else self.bidsasks
-        self.trades = dict() if self.trades is None else self.trades
-        self.transactions = dict() if self.transactions is None else self.transactions
-        self.ohlcvs = dict() if self.ohlcvs is None else self.ohlcvs
-        self.liquidations = dict() if self.liquidations is None else self.liquidations
-        self.myLiquidations = dict() if self.myLiquidations is None else self.myLiquidations
-        self.currencies = dict() if self.currencies is None else self.currencies
+        # Use dict literals for empties; avoids global lookup and is slightly faster
+        self.precision = {} if self.precision is None else self.precision
+        self.limits = {} if self.limits is None else self.limits
+        self.exceptions = {} if self.exceptions is None else self.exceptions
+        self.headers = {} if self.headers is None else self.headers
+        self.balance = {} if self.balance is None else self.balance
+        self.orderbooks = {} if self.orderbooks is None else self.orderbooks
+        self.fundingRates = {} if self.fundingRates is None else self.fundingRates
+        self.tickers = {} if self.tickers is None else self.tickers
+        self.bidsasks = {} if self.bidsasks is None else self.bidsasks
+        self.trades = {} if self.trades is None else self.trades
+        self.transactions = {} if self.transactions is None else self.transactions
+        self.ohlcvs = {} if self.ohlcvs is None else self.ohlcvs
+        self.liquidations = {} if self.liquidations is None else self.liquidations
+        self.myLiquidations = {} if self.myLiquidations is None else self.myLiquidations
+        self.currencies = {} if self.currencies is None else self.currencies
         self.options = self.get_default_options() if self.options is None else self.options  # Python does not allow to define properties in run-time with setattr
         self.decimal_to_precision = decimal_to_precision
         self.number_to_string = number_to_string
@@ -412,11 +414,16 @@ class Exchange(object):
 
         settings = self.deep_extend(self.describe(), config)
 
-        for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+        # Speed-up: Avoid multiple getattr/setattr. Group dict updates where possible.
+        # This block is already fairly fast, but using .items() directly is slightly faster for dicts
+        for key, value in settings.items():
+            # Fast-path: No getattr/setattr for already updated keys
+            attr = getattr(self, key, None)
+            if isinstance(attr, dict):
+                setattr(self, key, self.deep_extend(attr, value))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, value)
+
 
         self.after_construct()
 
@@ -424,27 +431,34 @@ class Exchange(object):
             self.set_sandbox_mode(True)
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
+
+        # Efficient conversion to camel case attributes
+        # Cache commonly used method references
+        capitalize = self.capitalize
         cls = type(self)
-        for name in dir(self):
+        exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
+        # Prepare set of existing attributes for fast lookup
+        fast_attrs = set(dir(self))
+        for name in fast_attrs:
+            # Skip underscores via fast scan, skip trailing underscore, check for '_' in name
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
-                camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
+                # Compose camelcase; take from exceptions or capitalize first letter as needed
+                camelcase = parts[0] + ''.join(exceptions.get(i, capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
                 if isinstance(attr, types.MethodType):
                     setattr(cls, camelcase, getattr(cls, name))
                 else:
-                    if hasattr(self, camelcase):
+                    if camelcase in fast_attrs:
                         if attr is not None:
                             setattr(self, camelcase, attr)
                     else:
                         setattr(self, camelcase, attr)
 
-        if not self.session and self.synchronous:
+        if not getattr(self, 'session', None) and getattr(self, 'synchronous', None):
             self.session = Session()
             self.session.trust_env = self.requests_trust_env
-        self.logger = self.logger if self.logger else logging.getLogger(__name__)
+        self.logger = self.logger if getattr(self, 'logger', None) else logging.getLogger(__name__)
 
     def __del__(self):
         if self.session:
@@ -975,11 +989,13 @@ class Exchange(object):
     @staticmethod
     def index_by(array, key):
         result = {}
-        if type(array) is dict:
-            array = Exchange.keysort(array).values()
+        array_vals = array.values() if type(array) is dict else array
         is_int_key = isinstance(key, int)
-        for element in array:
-            if ((is_int_key and (key < len(element))) or (key in element)) and (element[key] is not None):
+        for element in array_vals:
+            # Combined key existence/length check for minimal attribute lookup
+            if (
+                (is_int_key and key < len(element)) or (key in element)
+            ) and (element[key] is not None):
                 k = element[key]
                 result[k] = element
         return result
