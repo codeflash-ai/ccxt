@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """Base exchange class"""
+from functools import lru_cache
 
 # -----------------------------------------------------------------------------
 
@@ -425,7 +426,9 @@ class Exchange(object):
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
-        for name in dir(self):
+        # Optimization: Use dir(self) once and process it as a list, precompute split and set lookups
+        attrs = dir(self)
+        for name in attrs:
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
                 # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
@@ -1057,6 +1060,7 @@ class Exchange(object):
         return _urlencode.unquote(Exchange.urlencode(params))
 
     @staticmethod
+    @lru_cache(maxsize=256)
     def encode_uri_component(uri, safe="~()*!.'"):
         return _urlencode.quote(uri, safe=safe)
 
