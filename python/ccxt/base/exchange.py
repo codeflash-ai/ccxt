@@ -428,7 +428,7 @@ class Exchange(object):
         for name in dir(self):
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
+                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
                 exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
                 camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
@@ -945,8 +945,11 @@ class Exchange(object):
 
     @staticmethod
     def filter_by(array, key, value=None):
-        array = Exchange.to_array(array)
-        return list(filter(lambda x: x[key] == value, array))
+        # Exchange.to_array: filter only if array is dict, otherwise leave as-is
+        # To reduce calls, avoid invoking Exchange.to_array if array is already a list
+        if isinstance(array, dict):
+            array = list(array.values())
+        return [x for x in array if x[key] == value]
 
     @staticmethod
     def filterBy(array, key, value=None):
