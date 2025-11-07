@@ -211,12 +211,10 @@ class luno(ccxt.async_support.luno):
         client.resolve(orderbook, messageHash)
 
     def custom_parse_order_book(self, orderbook, symbol, timestamp=None, bidsKey='bids', asksKey: IndexType = 'asks', priceKey: IndexType = 'price', amountKey: IndexType = 'volume', countOrIdKey: IndexType = 2):
-        bids = self.parse_bids_asks(self.safe_value(orderbook, bidsKey, []), priceKey, amountKey, countOrIdKey)
-        asks = self.parse_bids_asks(self.safe_value(orderbook, asksKey, []), priceKey, amountKey, countOrIdKey)
         return {
             'symbol': symbol,
-            'bids': self.sort_by(bids, 0, True),
-            'asks': self.sort_by(asks, 0),
+            'bids': self.sort_by(self.parse_bids_asks(self.safe_value(orderbook, bidsKey, []), priceKey, amountKey, countOrIdKey), 0, True),
+            'asks': self.sort_by(self.parse_bids_asks(self.safe_value(orderbook, asksKey, []), priceKey, amountKey, countOrIdKey), 0),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'nonce': None,
@@ -224,10 +222,8 @@ class luno(ccxt.async_support.luno):
 
     def parse_bids_asks(self, bidasks, priceKey: IndexType = 'price', amountKey: IndexType = 'volume', thirdKey: IndexType = 2):
         bidasks = self.to_array(bidasks)
-        result = []
-        for i in range(0, len(bidasks)):
-            result.append(self.custom_parse_bid_ask(bidasks[i], priceKey, amountKey, thirdKey))
-        return result
+        # Use list comprehension for faster/cleaner iteration over bidasks
+        return [self.custom_parse_bid_ask(bidask, priceKey, amountKey, thirdKey) for bidask in bidasks]
 
     def custom_parse_bid_ask(self, bidask, priceKey: IndexType = 'price', amountKey: IndexType = 'volume', thirdKey: IndexType = 2):
         price = self.safe_number(bidask, priceKey)
