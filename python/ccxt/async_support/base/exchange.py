@@ -324,7 +324,11 @@ class Exchange(BaseExchange):
             If a reload is in progress, it waits for completion before returning.
             If an error occurs during loading or preparation, an exception is raised.
         """
-        if (reload and not self.reloading_markets) or not self.markets_loading:
+        # Fast path: check if a markets reload is in progress or unnecessary
+        # Use local variable for markes_loading and reloading_markets to avoid attribute lookups in this hot path
+        markets_loading = self.markets_loading
+        reloading_markets = self.reloading_markets
+        if (reload and not reloading_markets) or not markets_loading:
             self.reloading_markets = True
             coroutine = self.load_markets_helper(reload, params)
             # coroutines can only be awaited once so we wrap it in a task
