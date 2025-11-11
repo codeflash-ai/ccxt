@@ -1,4 +1,3 @@
-
 from .utils import StrAndRepr
 
 
@@ -35,10 +34,14 @@ class ParseError(StrAndRepr, Exception):
     def column(self):
         """Return the 1-based column where the expression ceased to match."""
         # We choose 1-based because that's what Python does with SyntaxErrors.
-        try:
-            return self.pos - self.text.rindex('\n', 0, self.pos)
-        except ValueError:
-            return self.pos + 1
+        pos = self.pos
+        if pos == 0:
+            return 1
+        # Avoid exception handling overhead by explicitly checking
+        last_newline = self.text.rfind('\n', 0, pos)
+        if last_newline == -1:
+            return pos + 1
+        return pos - last_newline
 
 
 class IncompleteParseError(ParseError):
