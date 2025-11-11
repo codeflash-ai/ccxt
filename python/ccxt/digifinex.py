@@ -4014,14 +4014,17 @@ class digifinex(Exchange, ImplicitAPI):
         #
         marketId = self.safe_string(data, 'instrument_id')
         rawType = self.safe_integer(data, 'type')
+        symbol = self.safe_symbol(marketId, market, None, 'swap')
+        amount = self.safe_number(data, 'amount')
+        code = market['settle']
         return {
             'info': data,
-            'symbol': self.safe_symbol(marketId, market, None, 'swap'),
+            'symbol': symbol,
             'type': 'add' if (rawType == 1) else 'reduce',
             'marginMode': 'isolated',
-            'amount': self.safe_number(data, 'amount'),
+            'amount': amount,
             'total': None,
-            'code': market['settle'],
+            'code': code,
             'status': None,
             'timestamp': None,
             'datetime': None,
