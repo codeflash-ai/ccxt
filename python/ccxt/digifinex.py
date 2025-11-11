@@ -4126,7 +4126,8 @@ class digifinex(Exchange, ImplicitAPI):
         if signed and (pathPart == '/swap/v2') and (method == 'POST'):
             urlencoded = json.dumps(params)
         else:
-            urlencoded = self.urlencode(self.keysort(query))
+            # Optimized: use tuple-list directly from keysort
+            urlencoded = self.urlencode(dict(self.keysort(query)))
         if signed:
             auth = None
             nonce = None
