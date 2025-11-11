@@ -2391,26 +2391,31 @@ class poloniex(Exchange, ImplicitAPI):
             result['timestamp'] = ts
             result['datetime'] = self.iso8601(ts)
             details = self.safe_list(response, 'details', [])
-            for i in range(0, len(details)):
-                balance = details[i]
-                currencyId = self.safe_string(balance, 'ccy')
-                code = self.safe_currency_code(currencyId)
-                account = self.account()
-                account['total'] = self.safe_string(balance, 'avail')
-                account['used'] = self.safe_string(balance, 'im')
+            # cache methods for speed in loop
+            safe_string = self.safe_string
+            safe_currency_code = self.safe_currency_code
+            account_fn = self.account
+            for balance in details:
+                currencyId = safe_string(balance, 'ccy')
+                code = safe_currency_code(currencyId)
+                account = account_fn()
+                account['total'] = safe_string(balance, 'avail')
+                account['used'] = safe_string(balance, 'im')
                 result[code] = account
             return self.safe_balance(result)
         # for spot
-        for i in range(0, len(response)):
-            account = self.safe_value(response, i, {})
-            balances = self.safe_value(account, 'balances')
-            for j in range(0, len(balances)):
-                balance = self.safe_value(balances, j)
-                currencyId = self.safe_string(balance, 'currency')
-                code = self.safe_currency_code(currencyId)
-                newAccount = self.account()
-                newAccount['free'] = self.safe_string(balance, 'available')
-                newAccount['used'] = self.safe_string(balance, 'hold')
+        safe_value = self.safe_value
+        safe_string = self.safe_string
+        safe_currency_code = self.safe_currency_code
+        account_fn = self.account
+        for account in response:
+            balances = safe_value(account, 'balances')
+            for balance in balances:
+                currencyId = safe_string(balance, 'currency')
+                code = safe_currency_code(currencyId)
+                newAccount = account_fn()
+                newAccount['free'] = safe_string(balance, 'available')
+                newAccount['used'] = safe_string(balance, 'hold')
                 result[code] = newAccount
         return self.safe_balance(result)
 
