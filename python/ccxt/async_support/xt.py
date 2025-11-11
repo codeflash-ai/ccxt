@@ -2153,8 +2153,7 @@ class xt(Exchange, ImplicitAPI):
         if marketType is None:
             marketType = 'spot' if hasSpotKeys else 'contract'
         market = self.safe_market(marketId, market, '_', marketType)
-        side = None
-        takerOrMaker = None
+        side, takerOrMaker = None, None
         isBuyerMaker = self.safe_bool(trade, 'b')
         if isBuyerMaker is not None:
             side = 'sell' if isBuyerMaker else 'buy'
@@ -2177,13 +2176,18 @@ class xt(Exchange, ImplicitAPI):
         timestamp = self.safe_integer_n(trade, ['t', 'time', 'timestamp'])
         quantity = self.safe_string_2(trade, 'q', 'quantity')
         amount = None
+        contractSize = self.number_to_string(market['contractSize'])
         if marketType == 'spot':
             amount = quantity
         else:
+            a_val = self.safe_string(trade, 'a')
             if quantity is None:
-                amount = Precise.string_mul(self.safe_string(trade, 'a'), self.number_to_string(market['contractSize']))
+                amount = Precise.string_mul(a_val, contractSize)
             else:
-                amount = Precise.string_mul(quantity, self.number_to_string(market['contractSize']))
+                amount = Precise.string_mul(quantity, contractSize)
+        # Inline currency code logic for performance
+        feeCurrencyCode = self.safe_string_2(trade, 'feeCurrency', 'feeCoin')
+        feeCurrency = self.safe_currency_code(feeCurrencyCode)
         return self.safe_trade({
             'info': trade,
             'id': self.safe_string_n(trade, ['i', 'tradeId', 'execId']),
@@ -2198,7 +2202,7 @@ class xt(Exchange, ImplicitAPI):
             'amount': amount,
             'cost': None,
             'fee': {
-                'currency': self.safe_currency_code(self.safe_string_2(trade, 'feeCurrency', 'feeCoin')),
+                'currency': feeCurrency,
                 'cost': self.safe_string(trade, 'fee'),
             },
         }, market)

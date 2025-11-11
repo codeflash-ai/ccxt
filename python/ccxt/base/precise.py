@@ -15,17 +15,19 @@ class Precise:
     def __init__(self, number, decimals=None):
         if decimals is None:
             modifier = 0
-            number = number.lower()
-            if 'e' in number:
-                number, modifier = number.split('e')
-                modifier = int(modifier)
-            decimal_index = number.find('.')
+            number_str = str(number)
+            e_pos = number_str.find("e")
+            if e_pos != -1:
+                num, mod = number_str[:e_pos], number_str[e_pos + 1 :]
+                number_str = num
+                modifier = int(mod)
+            decimal_index = number_str.find(".")
             if decimal_index > -1:
-                self.decimals = len(number) - decimal_index - 1
-                self.integer = int(number.replace('.', ''))
+                self.decimals = len(number_str) - decimal_index - 1
+                self.integer = int(number_str.replace(".", ""))
             else:
                 self.decimals = 0
-                self.integer = int(number)
+                self.integer = int(number_str)
             self.decimals = self.decimals - modifier
         else:
             self.integer = number
@@ -86,10 +88,10 @@ class Precise:
         if distance == 0:
             numerator = self.integer
         elif distance < 0:
-            exponent = self.base ** -distance
+            exponent = self.base**-distance
             numerator = self.integer // exponent
         else:
-            exponent = self.base ** distance
+            exponent = self.base**distance
             numerator = self.integer * exponent
         result, mod = divmod(numerator, other.integer)
         # python floors negative numbers down instead of truncating
@@ -102,9 +104,11 @@ class Precise:
             integer_result = self.integer + other.integer
             return Precise(integer_result, self.decimals)
         else:
-            smaller, bigger = [other, self] if self.decimals > other.decimals else [self, other]
+            smaller, bigger = (
+                [other, self] if self.decimals > other.decimals else [self, other]
+            )
             exponent = bigger.decimals - smaller.decimals
-            normalised = smaller.integer * (self.base ** exponent)
+            normalised = smaller.integer * (self.base**exponent)
             result = normalised + bigger.integer
             return Precise(result, bigger.decimals)
 
@@ -120,9 +124,9 @@ class Precise:
 
     def mod(self, other):
         rationizerNumberator = max(-self.decimals + other.decimals, 0)
-        numerator = self.integer * (self.base ** rationizerNumberator)
+        numerator = self.integer * (self.base**rationizerNumberator)
         rationizerDenominator = max(-other.decimals + self.decimals, 0)
-        denominator = other.integer * (self.base ** rationizerDenominator)
+        denominator = other.integer * (self.base**rationizerDenominator)
         result = numerator % denominator
         return Precise(result, rationizerDenominator + other.decimals)
 
@@ -158,13 +162,13 @@ class Precise:
                 self.decimals = 0
             return self
         for i in range(start, -1, -1):
-            if string[i] != '0':
+            if string[i] != "0":
                 break
         difference = start - i
         if difference == 0:
             return self
         self.decimals -= difference
-        self.integer = int(string[:i + 1])
+        self.integer = int(string[: i + 1])
 
     def equals(self, other):
         self.reduce()
@@ -173,19 +177,19 @@ class Precise:
 
     def __str__(self):
         self.reduce()
-        sign = '-' if self.integer < 0 else ''
-        integer_array = list(str(abs(self.integer)).rjust(self.decimals, '0'))
+        sign = "-" if self.integer < 0 else ""
+        integer_array = list(str(abs(self.integer)).rjust(self.decimals, "0"))
         index = len(integer_array) - self.decimals
         if index == 0:
-            item = '0.'
+            item = "0."
         elif self.decimals < 0:
-            item = '0' * (-self.decimals)
+            item = "0" * (-self.decimals)
         elif self.decimals == 0:
-            item = ''
+            item = ""
         else:
-            item = '.'
+            item = "."
         integer_array.insert(index, item)
-        return sign + ''.join(integer_array)
+        return sign + "".join(integer_array)
 
     def __repr__(self):
         return "Precise(" + str(self) + ")"
