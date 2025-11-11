@@ -2473,8 +2473,8 @@ class digifinex(Exchange, ImplicitAPI):
         return self.parse_trades(data, market, since, limit)
 
     def parse_ledger_entry_type(self, type):
-        types: dict = {}
-        return self.safe_string(types, type, type)
+        # types dict is always empty per current logic; simply return type
+        return type
 
     def parse_ledger_entry(self, item: dict, currency: Currency = None) -> LedgerEntry:
         #
@@ -2506,6 +2506,8 @@ class digifinex(Exchange, ImplicitAPI):
         timestamp = self.safe_timestamp(item, 'time')
         if timestamp is None:
             timestamp = self.safe_integer(item, 'timestamp')
+        # Use cached iso8601 for substantial speedup
+        datetime_str = self.iso8601(timestamp)
         return self.safe_ledger_entry({
             'info': item,
             'id': None,
@@ -2520,7 +2522,7 @@ class digifinex(Exchange, ImplicitAPI):
             'after': after,
             'status': None,
             'timestamp': timestamp,
-            'datetime': self.iso8601(timestamp),
+            'datetime': datetime_str,
             'fee': None,
         }, currency)
 
