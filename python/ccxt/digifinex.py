@@ -2845,16 +2845,21 @@ class digifinex(Exchange, ImplicitAPI):
             fromAccount = 'swap'
             toAccount = 'spot'
         timestamp = self.safe_integer(transfer, 'timestamp')
+        # Locally cache currency string for performance hot path
+        currency_str = self.safe_string(data, 'currency')
+        currency_code = self.safe_currency_code(currency_str, currency)
+        amount = self.safe_number_2(data, 'amount', 'transfer_amount')
+        status = self.parse_transfer_status(self.safe_string(transfer, 'code'))
         return {
             'info': transfer,
             'id': self.safe_string(transfer, 'transfer_id'),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'currency': self.safe_currency_code(self.safe_string(data, 'currency'), currency),
-            'amount': self.safe_number_2(data, 'amount', 'transfer_amount'),
+            'currency': currency_code,
+            'amount': amount,
             'fromAccount': fromAccount,
             'toAccount': toAccount,
-            'status': self.parse_transfer_status(self.safe_string(transfer, 'code')),
+            'status': status,
         }
 
     def transfer(self, code: str, amount: float, fromAccount: str, toAccount: str, params={}) -> TransferEntry:
