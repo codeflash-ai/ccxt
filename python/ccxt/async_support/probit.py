@@ -596,14 +596,21 @@ class probit(Exchange, ImplicitAPI):
             'timestamp': None,
             'datetime': None,
         }
-        data = self.safe_value(response, 'data', [])
-        for i in range(0, len(data)):
-            balance = data[i]
-            currencyId = self.safe_string(balance, 'currency_id')
-            code = self.safe_currency_code(currencyId)
-            account = self.account()
-            account['total'] = self.safe_string(balance, 'total')
-            account['free'] = self.safe_string(balance, 'available')
+        # Local caching of bound methods
+        safe_value = self.safe_value
+        safe_string = self.safe_string
+        safe_currency_code = self.safe_currency_code
+        account_method = self.account
+
+        data = safe_value(response, 'data', [])
+        # Loop optimizations: hoist method lookup, reduce local dict lookups
+        for balance in data:
+            currencyId = safe_string(balance, 'currency_id')
+            code = safe_currency_code(currencyId)
+            account = account_method()
+            # Only two fields are accessed, assign directly for slight speedup
+            account['total'] = safe_string(balance, 'total')
+            account['free'] = safe_string(balance, 'available')
             result[code] = account
         return self.safe_balance(result)
 
