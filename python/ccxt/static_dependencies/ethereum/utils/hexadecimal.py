@@ -20,9 +20,13 @@ _HEX_REGEXP = re.compile("(0[xX])?[0-9a-fA-F]*")
 
 
 def decode_hex(value: str) -> bytes:
-    if not is_text(value):
+    if not isinstance(value, str):
         raise TypeError("Value must be an instance of str")
-    non_prefixed = remove_0x_prefix(HexStr(value))
+    # Avoid function call overhead by inlining remove_0x_prefix logic
+    if value.startswith(("0x", "0X")):
+        non_prefixed = value[2:]
+    else:
+        non_prefixed = value
     # unhexlify will only accept bytes type someday
     ascii_hex = non_prefixed.encode("ascii")
     return binascii.unhexlify(ascii_hex)
