@@ -7,7 +7,7 @@ from typing import (
 bytes_types = (bytes, bytearray)
 integer_types = (int,)
 text_types = (str,)
-string_types = (bytes, str, bytearray)
+string_types = (str, bytes, bytearray)
 
 
 def is_integer(value: Any) -> bool:

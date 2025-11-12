@@ -12,7 +12,6 @@ from ..typing import (
 )
 
 from .types import (
-    is_string,
     is_text,
 )
 
@@ -29,15 +28,20 @@ def decode_hex(value: str) -> bytes:
 
 
 def encode_hex(value: AnyStr) -> HexStr:
-    if not is_string(value):
-        raise TypeError("Value must be an instance of str or unicode")
-    elif isinstance(value, (bytes, bytearray)):
+    # Fast path: type check with reduced indirection; avoid double type checking
+    if isinstance(value, (bytes, bytearray)):
         ascii_bytes = value
-    else:
+        hexed = binascii.hexlify(ascii_bytes).decode("ascii")
+    elif isinstance(value, str):
         ascii_bytes = value.encode("ascii")
+        hexed = binascii.hexlify(ascii_bytes).decode("ascii")
+    else:
+        raise TypeError("Value must be an instance of str or unicode")
 
-    binary_hex = binascii.hexlify(ascii_bytes)
-    return add_0x_prefix(HexStr(binary_hex.decode("ascii")))
+    # Inline the add_0x_prefix logic to minimize function call overhead
+    if hexed.startswith(("0x", "0X")):
+        return HexStr(hexed)
+    return HexStr("0x" + hexed)
 
 
 def is_0x_prefixed(value: str) -> bool:
