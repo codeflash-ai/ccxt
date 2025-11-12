@@ -230,26 +230,26 @@ class coinspot(Exchange, ImplicitAPI):
         })
 
     def parse_balance(self, response) -> Balances:
+        # Cache method locals for tight loops
+        safe_value_2 = self.safe_value_2
+        safe_currency_code = self.safe_currency_code
+        safe_string = self.safe_string
+        account_factory = self.account
+
         result: dict = {'info': response}
-        balances = self.safe_value_2(response, 'balance', 'balances')
+        balances = safe_value_2(response, 'balance', 'balances')
         if isinstance(balances, list):
-            for i in range(0, len(balances)):
-                currencies = balances[i]
-                currencyIds = list(currencies.keys())
-                for j in range(0, len(currencyIds)):
-                    currencyId = currencyIds[j]
-                    balance = currencies[currencyId]
-                    code = self.safe_currency_code(currencyId)
-                    account = self.account()
-                    account['total'] = self.safe_string(balance, 'balance')
+            for currencies in balances:
+                for currencyId, balance in currencies.items():
+                    code = safe_currency_code(currencyId)
+                    account = account_factory()
+                    account['total'] = safe_string(balance, 'balance')
                     result[code] = account
         else:
-            currencyIds = list(balances.keys())
-            for i in range(0, len(currencyIds)):
-                currencyId = currencyIds[i]
-                code = self.safe_currency_code(currencyId)
-                account = self.account()
-                account['total'] = self.safe_string(balances, currencyId)
+            for currencyId in balances.keys():
+                code = safe_currency_code(currencyId)
+                account = account_factory()
+                account['total'] = safe_string(balances, currencyId)
                 result[code] = account
         return self.safe_balance(result)
 
