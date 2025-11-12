@@ -233,20 +233,14 @@ class coinspot(Exchange, ImplicitAPI):
         result: dict = {'info': response}
         balances = self.safe_value_2(response, 'balance', 'balances')
         if isinstance(balances, list):
-            for i in range(0, len(balances)):
-                currencies = balances[i]
-                currencyIds = list(currencies.keys())
-                for j in range(0, len(currencyIds)):
-                    currencyId = currencyIds[j]
-                    balance = currencies[currencyId]
+            for currencies in balances:
+                for currencyId, balance in currencies.items():
                     code = self.safe_currency_code(currencyId)
                     account = self.account()
                     account['total'] = self.safe_string(balance, 'balance')
                     result[code] = account
         else:
-            currencyIds = list(balances.keys())
-            for i in range(0, len(currencyIds)):
-                currencyId = currencyIds[i]
+            for currencyId in balances.keys():
                 code = self.safe_currency_code(currencyId)
                 account = self.account()
                 account['total'] = self.safe_string(balances, currencyId)
