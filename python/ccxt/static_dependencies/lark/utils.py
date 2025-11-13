@@ -7,6 +7,8 @@ from typing import Callable, Iterator, List, Optional, Tuple, Type, TypeVar, Uni
 ###{standalone
 import sys, re
 import logging
+import sre_constants
+import sre_parse
 
 logger: logging.Logger = logging.getLogger("lark")
 logger.addHandler(logging.StreamHandler())

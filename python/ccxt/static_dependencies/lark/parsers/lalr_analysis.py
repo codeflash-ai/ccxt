@@ -43,12 +43,20 @@ class ParseTableBase(Generic[StateT]):
 
     def serialize(self, memo):
         tokens = Enumerator()
+        tokens_get = tokens.get  # Local ref for speed
+        Reduce_action = Reduce   # Local ref for speed
 
-        states = {
-            state: {tokens.get(token): ((1, arg.serialize(memo)) if action is Reduce else (0, arg))
-                    for token, (action, arg) in actions.items()}
-            for state, actions in self.states.items()
-        }
+        states = {}
+        for state, actions in self.states.items():
+            state_dict = {}
+            for token, (action, arg) in actions.items():
+                tid = tokens_get(token)
+                if action is Reduce_action:
+                    state_dict[tid] = (1, arg.serialize(memo))
+                else:
+                    state_dict[tid] = (0, arg)
+            states[state] = state_dict
+
 
         return {
             'tokens': tokens.reversed(),
