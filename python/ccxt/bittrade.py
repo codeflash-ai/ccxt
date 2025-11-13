@@ -831,35 +831,40 @@ class bittrade(Exchange, ImplicitAPI):
         #          "trade-id": 100050305348
         #     },
         #
-        marketId = self.safe_string(trade, 'symbol')
-        symbol = self.safe_symbol(marketId, market)
-        timestamp = self.safe_integer_2(trade, 'ts', 'created-at')
-        order = self.safe_string(trade, 'order-id')
-        side = self.safe_string(trade, 'direction')
-        type = self.safe_string(trade, 'type')
+        safe_string = self.safe_string
+        safe_symbol = self.safe_symbol
+        safe_integer_2 = self.safe_integer_2
+        safe_currency_code = self.safe_currency_code
+
+        marketId = safe_string(trade, 'symbol')
+        symbol = safe_symbol(marketId, market)
+        timestamp = safe_integer_2(trade, 'ts', 'created-at')
+        order = safe_string(trade, 'order-id')
+        side = safe_string(trade, 'direction')
+        type = safe_string(trade, 'type')
         if type is not None:
             typeParts = type.split('-')
             side = typeParts[0]
             type = typeParts[1]
-        takerOrMaker = self.safe_string(trade, 'role')
-        price = self.safe_string(trade, 'price')
+        takerOrMaker = safe_string(trade, 'role')
+        price = safe_string(trade, 'price')
         amount = self.safe_string_2(trade, 'filled-amount', 'amount')
         cost = Precise.string_mul(price, amount)
         fee = None
-        feeCost = self.safe_string(trade, 'filled-fees')
-        feeCurrency = self.safe_currency_code(self.safe_string(trade, 'fee-currency'))
-        filledPoints = self.safe_string(trade, 'filled-points')
+        feeCost = safe_string(trade, 'filled-fees')
+        feeCurrency = safe_currency_code(safe_string(trade, 'fee-currency'))
+        filledPoints = safe_string(trade, 'filled-points')
         if filledPoints is not None:
             if (feeCost is None) or (Precise.string_eq(feeCost, '0.0')):
                 feeCost = filledPoints
-                feeCurrency = self.safe_currency_code(self.safe_string(trade, 'fee-deduct-currency'))
+                feeCurrency = safe_currency_code(safe_string(trade, 'fee-deduct-currency'))
         if feeCost is not None:
             fee = {
                 'cost': feeCost,
                 'currency': feeCurrency,
             }
         tradeId = self.safe_string_2(trade, 'trade-id', 'tradeId')
-        id = self.safe_string(trade, 'id', tradeId)
+        id = safe_string(trade, 'id', tradeId)
         return self.safe_trade({
             'info': trade,
             'id': id,
