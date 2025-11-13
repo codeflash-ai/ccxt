@@ -412,11 +412,14 @@ class Exchange(object):
 
         settings = self.deep_extend(self.describe(), config)
 
-        for key in settings:
-            if hasattr(self, key) and isinstance(getattr(self, key), dict):
-                setattr(self, key, self.deep_extend(getattr(self, key), settings[key]))
+        # Optimize dictionary merging: inline dict merge rather than repeated attribute getter/setter loop
+        for key, value in settings.items():
+            current = getattr(self, key, None)
+            if isinstance(current, dict) and isinstance(value, dict):
+                setattr(self, key, self.deep_extend(current, value))
             else:
-                setattr(self, key, settings[key])
+                setattr(self, key, value)
+
 
         self.after_construct()
 
@@ -425,15 +428,16 @@ class Exchange(object):
 
         # convert all properties from underscore notation foo_bar to camelcase notation fooBar
         cls = type(self)
+        exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
         for name in dir(self):
             if name[0] != '_' and name[-1] != '_' and '_' in name:
                 parts = name.split('_')
-                # fetch_ohlcv → fetchOHLCV (not fetchOhlcv!)
-                exceptions = {'ohlcv': 'OHLCV', 'le': 'LE', 'be': 'BE'}
                 camelcase = parts[0] + ''.join(exceptions.get(i, self.capitalize(i)) for i in parts[1:])
                 attr = getattr(self, name)
                 if isinstance(attr, types.MethodType):
-                    setattr(cls, camelcase, getattr(cls, name))
+                    # Set method property only on class if missing
+                    if not hasattr(cls, camelcase):
+                        setattr(cls, camelcase, getattr(cls, name))
                 else:
                     if hasattr(self, camelcase):
                         if attr is not None:
@@ -442,8 +446,10 @@ class Exchange(object):
                         setattr(self, camelcase, attr)
 
         if not self.session and self.synchronous:
-            self.session = Session()
-            self.session.trust_env = self.requests_trust_env
+            s = Session()
+            s.trust_env = self.requests_trust_env
+            self.session = s
+        # Setup logger if not already
         self.logger = self.logger if self.logger else logging.getLogger(__name__)
 
     def __del__(self):
@@ -1674,23 +1680,21 @@ class Exchange(object):
 
     @staticmethod
     def parse_timeframe(timeframe):
-        amount = int(timeframe[0:-1])
+        # Reduce conditional complexity with lookup table
+        scale_map = {
+            'y': 60 * 60 * 24 * 365,
+            'M': 60 * 60 * 24 * 30,
+            'w': 60 * 60 * 24 * 7,
+            'd': 60 * 60 * 24,
+            'h': 60 * 60,
+            'm': 60,
+            's': 1,
+        }
+        amount = int(timeframe[:-1])
         unit = timeframe[-1]
-        if 'y' == unit:
-            scale = 60 * 60 * 24 * 365
-        elif 'M' == unit:
-            scale = 60 * 60 * 24 * 30
-        elif 'w' == unit:
-            scale = 60 * 60 * 24 * 7
-        elif 'd' == unit:
-            scale = 60 * 60 * 24
-        elif 'h' == unit:
-            scale = 60 * 60
-        elif 'm' == unit:
-            scale = 60
-        elif 's' == unit:
-            scale = 1
-        else:
+        try:
+            scale = scale_map[unit]
+        except KeyError:
             raise NotSupported('timeframe unit {} is not supported'.format(unit))
         return amount * scale
 
@@ -6034,8 +6038,14 @@ class Exchange(object):
         return self.precisionMode == SIGNIFICANT_DIGITS
 
     def safe_number(self, obj, key: IndexType, defaultNumber: Num = None):
-        value = self.safe_string(obj, key)
-        return self.parse_number(value, defaultNumber)
+        # More efficient lookup and processing
+        value = obj.get(key, None)
+        if value is None:
+            return defaultNumber
+        try:
+            return self.number(value)
+        except Exception:
+            return defaultNumber
 
     def safe_number_n(self, obj: object, arr: List[IndexType], defaultNumber: Num = None):
         value = self.safe_string_n(obj, arr)

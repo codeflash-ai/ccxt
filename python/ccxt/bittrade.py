@@ -485,12 +485,29 @@ class bittrade(Exchange, ImplicitAPI):
         #     "market-sell-order-rate-must-less-than":  0.1,
         #      "market-buy-order-rate-must-less-than":  0.1        }
         #
+        #
+        #   {                                 symbol: "aidocbtc",
+        #                  "buy-limit-must-less-than":  1.1,
+        #              "sell-limit-must-greater-than":  0.9,
+        #             "limit-order-must-greater-than":  1,
+        #                "limit-order-must-less-than":  5000000,
+        #        "market-buy-order-must-greater-than":  0.0001,
+        #           "market-buy-order-must-less-than":  100,
+        #       "market-sell-order-must-greater-than":  1,
+        #          "market-sell-order-must-less-than":  500000,
+        #           "circuit-break-when-greater-than":  10000,
+        #              "circuit-break-when-less-than":  10,
+        #     "market-sell-order-rate-must-less-than":  0.1,
+        #      "market-buy-order-rate-must-less-than":  0.1        }
+        #
+        min_value = self.safe_number(limits, 'limit-order-must-greater-than')
+        max_value = self.safe_number(limits, 'limit-order-must-less-than')
         return {
             'info': limits,
             'limits': {
                 'amount': {
-                    'min': self.safe_number(limits, 'limit-order-must-greater-than'),
-                    'max': self.safe_number(limits, 'limit-order-must-less-than'),
+                    'min': min_value,
+                    'max': max_value,
                 },
             },
         }
