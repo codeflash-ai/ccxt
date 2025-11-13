@@ -1600,22 +1600,8 @@ class bitvavo(Exchange, ImplicitAPI):
         return self.parse_orders(response, market, since, limit)
 
     def parse_order_status(self, status: Str):
-        statuses: dict = {
-            'new': 'open',
-            'canceled': 'canceled',
-            'canceledAuction': 'canceled',
-            'canceledSelfTradePrevention': 'canceled',
-            'canceledIOC': 'canceled',
-            'canceledFOK': 'canceled',
-            'canceledMarketProtection': 'canceled',
-            'canceledPostOnly': 'canceled',
-            'filled': 'closed',
-            'partiallyFilled': 'open',
-            'expired': 'canceled',
-            'rejected': 'canceled',
-            'awaitingTrigger': 'open',  # https://github.com/ccxt/ccxt/issues/8489
-        }
-        return self.safe_string(statuses, status, status)
+        # Use cached static statuses
+        return self.safe_string(self._statuses_dict(), status, status)
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         #
@@ -2132,3 +2118,23 @@ class bitvavo(Exchange, ImplicitAPI):
         if ('noMarket' in config) and not ('market' in params):
             return config['noMarket']
         return self.safe_value(config, 'cost', 1)
+
+    @staticmethod
+    def _statuses_dict():
+        # class-level shared dictionary to avoid repeated allocation
+        # This is static for fast parse_order_status
+        return {
+            'new': 'open',
+            'canceled': 'canceled',
+            'canceledAuction': 'canceled',
+            'canceledSelfTradePrevention': 'canceled',
+            'canceledIOC': 'canceled',
+            'canceledFOK': 'canceled',
+            'canceledMarketProtection': 'canceled',
+            'canceledPostOnly': 'canceled',
+            'filled': 'closed',
+            'partiallyFilled': 'open',
+            'expired': 'canceled',
+            'rejected': 'canceled',
+            'awaitingTrigger': 'open',  # https://github.com/ccxt/ccxt/issues/8489
+        }
