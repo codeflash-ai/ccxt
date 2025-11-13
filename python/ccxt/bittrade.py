@@ -1579,28 +1579,31 @@ class bittrade(Exchange, ImplicitAPI):
         #        "successes": "1258075374411399168,1258075393254871040"
         #    }
         #
-        successes = self.safe_string(orders, 'successes')
-        success = None
+        safe_string = self.safe_string
+        safe_list = self.safe_list
+        safe_list_2 = self.safe_list_2
+        safe_string_2 = self.safe_string_2
+        safe_order = self.safe_order
+
+        successes = safe_string(orders, 'successes')
         if successes is not None:
             success = successes.split(',')
         else:
-            success = self.safe_list(orders, 'success', [])
-        failed = self.safe_list_2(orders, 'errors', 'failed', [])
+            success = safe_list(orders, 'success', [])
+        failed = safe_list_2(orders, 'errors', 'failed', [])
         result = []
-        for i in range(0, len(success)):
-            order = success[i]
-            result.append(self.safe_order({
+        for order in success:
+            result.append(safe_order({
                 'info': order,
                 'id': order,
                 'status': 'canceled',
             }))
-        for i in range(0, len(failed)):
-            order = failed[i]
-            result.append(self.safe_order({
+        for order in failed:
+            result.append(safe_order({
                 'info': order,
-                'id': self.safe_string_2(order, 'order-id', 'order_id'),
+                'id': safe_string_2(order, 'order-id', 'order_id'),
                 'status': 'failed',
-                'clientOrderId': self.safe_string(order, 'client-order-id'),
+                'clientOrderId': safe_string(order, 'client-order-id'),
             }))
         return result
 
