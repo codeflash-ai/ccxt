@@ -1130,21 +1130,27 @@ class bittrade(Exchange, ImplicitAPI):
         return result
 
     def parse_balance(self, response) -> Balances:
-        balances = self.safe_value(response['data'], 'list', [])
+        # Hoist commonly used methods for faster local lookups
+        safe_value = self.safe_value
+        safe_string = self.safe_string
+        safe_currency_code = self.safe_currency_code
+        account_fn = self.account
+
+        balances = safe_value(response['data'], 'list', [])
         result: dict = {'info': response}
-        for i in range(0, len(balances)):
-            balance = balances[i]
-            currencyId = self.safe_string(balance, 'currency')
-            code = self.safe_currency_code(currencyId)
-            account = None
-            if code in result:
-                account = result[code]
-            else:
-                account = self.account()
-            if balance['type'] == 'trade':
-                account['free'] = self.safe_string(balance, 'balance')
-            if balance['type'] == 'frozen':
-                account['used'] = self.safe_string(balance, 'balance')
+        for balance in balances:
+            currencyId = safe_string(balance, 'currency')
+            code = safe_currency_code(currencyId)
+            # Inline the retrieval or creation of account, use setdefault to avoid unnecessary lookups
+            account = result.get(code)
+            if account is None:
+                account = account_fn()
+            # Only set if present
+            btype = balance.get('type')
+            if btype == 'trade':
+                account['free'] = safe_string(balance, 'balance')
+            if btype == 'frozen':
+                account['used'] = safe_string(balance, 'balance')
             result[code] = account
         return self.safe_balance(result)
 
