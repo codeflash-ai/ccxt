@@ -300,18 +300,16 @@ class zaif(Exchange, ImplicitAPI):
             'datetime': None,
         }
         funds = self.safe_value(balances, 'funds', {})
-        currencyIds = list(funds.keys())
-        for i in range(0, len(currencyIds)):
-            currencyId = currencyIds[i]
+        # Replace range loop with direct dict iteration
+        for currencyId, balance in funds.items():
             code = self.safe_currency_code(currencyId)
-            balance = self.safe_string(funds, currencyId)
-            account = self.account()
-            account['free'] = balance
-            account['total'] = balance
-            if deposit is not None:
-                if currencyId in deposit:
-                    account['total'] = self.safe_string(deposit, currencyId)
-            result[code] = account
+            acct = self.account()
+            acct['free'] = balance
+            acct['total'] = balance
+            # Optimize by delaying membership test only if deposit exists
+            if deposit is not None and currencyId in deposit:
+                acct['total'] = self.safe_string(deposit, currencyId)
+            result[code] = acct
         return self.safe_balance(result)
 
     async def fetch_balance(self, params={}) -> Balances:
