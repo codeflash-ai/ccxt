@@ -80,18 +80,36 @@ class IntParseTable(ParseTableBase[int]):
 
     @classmethod
     def from_ParseTable(cls, parse_table: ParseTable):
+        # Use view object for O(1) lookup; enumerate directly over items, avoids list conversion
+        states_items = parse_table.states.items()
         enum = list(parse_table.states)
-        state_to_idx: Dict['State', int] = {s:i for i,s in enumerate(enum)}
+        state_to_idx: Dict['State', int] = {s: i for i, s in enumerate(enum)}
         int_states = {}
 
-        for s, la in parse_table.states.items():
-            la = {k:(v[0], state_to_idx[v[1]]) if v[0] is Shift else v
-                  for k,v in la.items()}
-            int_states[ state_to_idx[s] ] = la
+        # Avoid repeated dictionary lookups into state_to_idx by making it a local variable
+        shift = Shift
+        state_lookup = state_to_idx
 
+        # Precompute transformation for each state's la dict
+        for s, la in states_items:
+            # Avoid per-key lookup of state_to_idx in la dict when not needed
+            la_items = la.items()
+            # Build transformed la in one pass, prebind for perf
+            la_new = {}
+            for k, v in la_items:
+                if v[0] is shift:
+                    la_new[k] = (v[0], state_lookup[v[1]])
+                else:
+                    la_new[k] = v
+            int_states[state_lookup[s]] = la_new
 
-        start_states = {start:state_to_idx[s] for start, s in parse_table.start_states.items()}
-        end_states = {start:state_to_idx[s] for start, s in parse_table.end_states.items()}
+        # Since start_states and end_states may be small, map-comprehension is optimal
+        start_states = {}
+        for start, s in parse_table.start_states.items():
+            start_states[start] = state_lookup[s]
+        end_states = {}
+        for start, s in parse_table.end_states.items():
+            end_states[start] = state_lookup[s]
         return cls(int_states, start_states, end_states)
 
 ###}
