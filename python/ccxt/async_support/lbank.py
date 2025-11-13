@@ -25,6 +25,22 @@ from ccxt.base.errors import InvalidNonce
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
+LBANK_TRANSACTION_STATUSES = {
+    'deposit': {
+        '1': 'pending',
+        '2': 'ok',
+        '3': 'failed',
+        '4': 'canceled',
+        '5': 'transfer',
+    },
+    'withdrawal': {
+        '1': 'pending',
+        '2': 'canceled',
+        '3': 'failed',
+        '4': 'ok',
+    },
+}
+
 
 class lbank(Exchange, ImplicitAPI):
 
@@ -2297,22 +2313,7 @@ class lbank(Exchange, ImplicitAPI):
         }
 
     def parse_transaction_status(self, status, type):
-        statuses: dict = {
-            'deposit': {
-                '1': 'pending',
-                '2': 'ok',
-                '3': 'failed',
-                '4': 'canceled',
-                '5': 'transfer',
-            },
-            'withdrawal': {
-                '1': 'pending',
-                '2': 'canceled',
-                '3': 'failed',
-                '4': 'ok',
-            },
-        }
-        return self.safe_string(self.safe_value(statuses, type, {}), status, status)
+        return self.safe_string(self.safe_value(LBANK_TRANSACTION_STATUSES, type, {}), status, status)
 
     def parse_transaction(self, transaction: dict, currency: Currency = None) -> Transaction:
         #
