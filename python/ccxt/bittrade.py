@@ -26,6 +26,14 @@ from ccxt.base.decimal_to_precision import TRUNCATE
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
+_statuses: dict = {
+    'partial-filled': 'open',
+    'partial-canceled': 'canceled',
+    'filled': 'closed',
+    'canceled': 'canceled',
+    'submitted': 'open',
+}
+
 
 class bittrade(Exchange, ImplicitAPI):
 
@@ -1295,14 +1303,7 @@ class bittrade(Exchange, ImplicitAPI):
         return self.parse_orders(data, market, since, limit)
 
     def parse_order_status(self, status: Str):
-        statuses: dict = {
-            'partial-filled': 'open',
-            'partial-canceled': 'canceled',
-            'filled': 'closed',
-            'canceled': 'canceled',
-            'submitted': 'open',
-        }
-        return self.safe_string(statuses, status, status)
+        return self.safe_string(_statuses, status, status)
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         #
