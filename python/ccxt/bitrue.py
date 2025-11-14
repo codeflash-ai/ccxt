@@ -3188,8 +3188,7 @@ class bitrue(Exchange, ImplicitAPI):
         elif ('byLimit' in config) and ('limit' in params):
             limit = params['limit']
             byLimit = config['byLimit']
-            for i in range(0, len(byLimit)):
-                entry = byLimit[i]
+            for entry in byLimit:
                 if limit <= entry[0]:
                     return entry[1]
         return self.safe_value(config, 'cost', 1)
