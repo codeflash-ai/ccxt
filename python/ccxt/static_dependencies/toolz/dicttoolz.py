@@ -59,14 +59,14 @@ def merge_with(func, *dicts, **kwargs):
         dicts = dicts[0]
     factory = _get_factory(merge_with, kwargs)
 
-    values = collections.defaultdict(lambda: [].append)
+    values = collections.defaultdict(list)
     for d in dicts:
         for k, v in d.items():
-            values[k](v)
+            values[k].append(v)
 
     result = factory()
-    for k, v in values.items():
-        result[k] = func(v.__self__)
+    for k, vlist in values.items():
+        result[k] = func(vlist)
     return result
 
 
