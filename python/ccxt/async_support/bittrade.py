@@ -26,6 +26,27 @@ from ccxt.base.decimal_to_precision import TRUNCATE
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
+statuses: dict = {
+    # deposit statuses
+    'unknown': 'failed',
+    'confirming': 'pending',
+    'confirmed': 'ok',
+    'safe': 'ok',
+    'orphan': 'failed',
+    # withdrawal statuses
+    'submitted': 'pending',
+    'canceled': 'canceled',
+    'reexamine': 'pending',
+    'reject': 'failed',
+    'pass': 'pending',
+    'wallet-reject': 'failed',
+    # 'confirmed': 'ok',  # present in deposit statuses
+    'confirm-error': 'failed',
+    'repealed': 'failed',
+    'wallet-transfer': 'pending',
+    'pre-transfer': 'pending',
+}
+
 
 class bittrade(Exchange, ImplicitAPI):
 
@@ -1802,26 +1823,6 @@ class bittrade(Exchange, ImplicitAPI):
         }
 
     def parse_transaction_status(self, status: Str):
-        statuses: dict = {
-            # deposit statuses
-            'unknown': 'failed',
-            'confirming': 'pending',
-            'confirmed': 'ok',
-            'safe': 'ok',
-            'orphan': 'failed',
-            # withdrawal statuses
-            'submitted': 'pending',
-            'canceled': 'canceled',
-            'reexamine': 'pending',
-            'reject': 'failed',
-            'pass': 'pending',
-            'wallet-reject': 'failed',
-            # 'confirmed': 'ok',  # present in deposit statuses
-            'confirm-error': 'failed',
-            'repealed': 'failed',
-            'wallet-transfer': 'pending',
-            'pre-transfer': 'pending',
-        }
         return self.safe_string(statuses, status, status)
 
     async def withdraw(self, code: str, amount: float, address: str, tag: Str = None, params={}) -> Transaction:
