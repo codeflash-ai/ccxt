@@ -52,9 +52,11 @@ def randrange(order, entropy=None):
         if 1 <= candidate < order:
             return candidate
         continue
-    raise RuntimeError("randrange() tried hard but gave up, either something"
-                       " is very wrong or you got realllly unlucky. Order was"
-                       " %x" % order)
+    raise RuntimeError(
+        "randrange() tried hard but gave up, either something"
+        " is very wrong or you got realllly unlucky. Order was"
+        " %x" % order
+    )
 
 
 class PRNG:
@@ -113,6 +115,7 @@ def bits_and_bytes(order):
 #   secexp = ecdsa.util.randrange_from_seed__trytryagain(sed, curve.order)
 #   sk = SigningKey.from_secret_exponent(secexp, curve)
 
+
 def randrange_from_seed__truncate_bytes(seed, order, hashmod=sha256):
     # hash the seed, then turn the digest into a number in [1,order), but
     # don't worry about trying to uniformly fill the range. This will lose,
@@ -136,7 +139,7 @@ def randrange_from_seed__truncate_bits(seed, order, hashmod=sha256):
     base = "\x00" * (maxbytes - len(base)) + base
     topbits = 8 * maxbytes - bits
     if topbits:
-        base = int.to_bytes(ord(base[0]) & lsb_of_ones(topbits), 1, 'big') + base[1:]
+        base = int.to_bytes(ord(base[0]) & lsb_of_ones(topbits), 1, "big") + base[1:]
     number = 1 + int(binascii.hexlify(base), 16)
     assert 1 <= number < order
     return number
@@ -153,9 +156,11 @@ def randrange_from_seed__trytryagain(seed, order):
     bits, bytes, extrabits = bits_and_bytes(order)
     generate = PRNG(seed)
     while True:
-        extrabyte = b''
+        extrabyte = b""
         if extrabits:
-            extrabyte = int.to_bytes(ord(generate(1)) & lsb_of_ones(extrabits), 1, 'big')
+            extrabyte = int.to_bytes(
+                ord(generate(1)) & lsb_of_ones(extrabits), 1, "big"
+            )
         guess = string_to_number(extrabyte + generate(bytes)) + 1
         if 1 <= guess < order:
             return guess
@@ -163,8 +168,8 @@ def randrange_from_seed__trytryagain(seed, order):
 
 def number_to_string(num, order):
     l = orderlen(order)
-    fmt_str = "%0" + str(2 * l) + "x"
-    string = binascii.unhexlify((fmt_str % num).encode())
+    hex_str = hex(num)[2:].zfill(2 * l)
+    string = binascii.unhexlify(hex_str)
     assert len(string) == l, (len(string), l)
     return string
 
@@ -189,6 +194,7 @@ def string_to_number_fixedlen(string, order):
 # these methods are useful for the sigencode= argument to SK.sign() and the
 # sigdecode= argument to VK.verify(), and control how the signature is packed
 # or unpacked.
+
 
 def sigencode_strings(r, s, order, v=None):
     r_str = number_to_string(r, order)
@@ -255,12 +261,14 @@ def sigdecode_strings(rs_strings, order):
 def sigdecode_der(sig_der, order):
     # return der.encode_sequence(der.encode_integer(r), der.encode_integer(s))
     rs_strings, empty = der.remove_sequence(sig_der)
-    if empty != b'':
-        raise der.UnexpectedDER("trailing junk after DER sig: %s" %
-                                binascii.hexlify(empty))
+    if empty != b"":
+        raise der.UnexpectedDER(
+            "trailing junk after DER sig: %s" % binascii.hexlify(empty)
+        )
     r, rest = der.remove_integer(rs_strings)
     s, empty = der.remove_integer(rest)
-    if empty != b'':
-        raise der.UnexpectedDER("trailing junk after DER numbers: %s" %
-                                binascii.hexlify(empty))
+    if empty != b"":
+        raise der.UnexpectedDER(
+            "trailing junk after DER numbers: %s" % binascii.hexlify(empty)
+        )
     return r, s
