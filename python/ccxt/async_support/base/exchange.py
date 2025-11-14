@@ -326,9 +326,8 @@ class Exchange(BaseExchange):
         """
         if (reload and not self.reloading_markets) or not self.markets_loading:
             self.reloading_markets = True
-            coroutine = self.load_markets_helper(reload, params)
             # coroutines can only be awaited once so we wrap it in a task
-            self.markets_loading = asyncio.ensure_future(coroutine)
+            self.markets_loading = asyncio.create_task(self.load_markets_helper(reload, params))
         try:
             result = await self.markets_loading
         except asyncio.CancelledError as e:  # CancelledError is a base exception so we need to catch it explicitly
