@@ -1290,32 +1290,36 @@ class bitmart(Exchange, ImplicitAPI):
         return result
 
     def get_currency_id_from_code_and_network(self, currencyCode: Str, networkCode: Str) -> Str:
-        if networkCode is None:
-            networkCode = self.default_network_code(currencyCode)  # use default network code if not provided
         currency = self.currency(currencyCode)
         id = currency['id']
-        idFromNetwork: Str = None
         networks = self.safe_dict(currency, 'networks', {})
-        networkInfo: dict = {}
-        if networkCode is None:
+
+        # Fast path: try provided networkCode, otherwise fallback to default
+        code = networkCode
+        if code is None:
+            code = self.default_network_code(currencyCode)
+        
+        # If code still None, try direct lookup by currencyCode in networks
+        if code is None:
             # network code is not provided and there is no default network code
             network = self.safe_dict(networks, currencyCode)  # trying to find network that has the same code
             if network is None:
-                # use the first network in the networks list if there is no network code with the same code
-                keys = list(networks.keys())
-                length = len(keys)
-                if length > 0:
-                    network = self.safe_value(networks, keys[0])
+                # Use first network if available
+                if networks:
+                    # Get the first network by insertion order
+                    first_key = next(iter(networks))
+                    network = self.safe_value(networks, first_key)
             networkInfo = self.safe_dict(network, 'info', {})
             idFromNetwork = self.safe_string(networkInfo, 'currency')  # use currency name from network
+            return idFromNetwork if idFromNetwork is not None else id
         else:
-            providedOrDefaultNetwork = self.safe_dict(networks, networkCode)
+            providedOrDefaultNetwork = self.safe_dict(networks, code)
             if providedOrDefaultNetwork is not None:
                 networkInfo = self.safe_dict(providedOrDefaultNetwork, 'info', {})
                 idFromNetwork = self.safe_string(networkInfo, 'currency')  # use currency name from network
+                return idFromNetwork if idFromNetwork is not None else id
             else:
-                id += '-' + self.network_code_to_id(networkCode, currencyCode)  # use concatenated currency id and network code if network is not found
-        return idFromNetwork if (idFromNetwork is not None) else id
+                return id + '-' + self.network_code_to_id(code, currencyCode)
 
     async def fetch_transaction_fee(self, code: str, params={}):
         """
