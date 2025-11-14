@@ -29,6 +29,11 @@ from ccxt.base.decimal_to_precision import TRUNCATE
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
+_TRANSFER_TYPE_MAP = {
+    'contract_to_spot': 'spot',
+    'spot_to_contract': 'swap',
+}
+
 
 class bitmart(Exchange, ImplicitAPI):
 
@@ -4223,11 +4228,8 @@ class bitmart(Exchange, ImplicitAPI):
         return self.safe_string(statuses, status, status)
 
     def parse_transfer_to_account(self, type):
-        types: dict = {
-            'contract_to_spot': 'spot',
-            'spot_to_contract': 'swap',
-        }
-        return self.safe_string(types, type, type)
+        # Reference static map instead of recreating dict every call
+        return self.safe_string(_TRANSFER_TYPE_MAP, type, type)
 
     def parse_transfer_from_account(self, type):
         types: dict = {
