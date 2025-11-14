@@ -643,36 +643,44 @@ class bittrade(Exchange, ImplicitAPI):
         #         "askSize":  0.4156
         #     }
         #
-        symbol = self.safe_symbol(None, market)
-        timestamp = self.safe_integer(ticker, 'ts')
+        # OPTIMIZATION: cache methods and avoid attribute lookup when hot
+        safe_symbol = self.safe_symbol
+        safe_integer = self.safe_integer
+        safe_string = self.safe_string
+
+        symbol = safe_symbol(None, market)
+        timestamp = safe_integer(ticker, 'ts')
         bid = None
         bidVolume = None
         ask = None
         askVolume = None
         if 'bid' in ticker:
-            if isinstance(ticker['bid'], list):
-                bid = self.safe_string(ticker['bid'], 0)
-                bidVolume = self.safe_string(ticker['bid'], 1)
+            bid_val = ticker['bid']
+            if isinstance(bid_val, list):
+                bid = safe_string(bid_val, 0)
+                bidVolume = safe_string(bid_val, 1)
             else:
-                bid = self.safe_string(ticker, 'bid')
-                bidVolume = self.safe_string(ticker, 'bidSize')
+                bid = safe_string(ticker, 'bid')
+                bidVolume = safe_string(ticker, 'bidSize')
         if 'ask' in ticker:
-            if isinstance(ticker['ask'], list):
-                ask = self.safe_string(ticker['ask'], 0)
-                askVolume = self.safe_string(ticker['ask'], 1)
+            ask_val = ticker['ask']
+            if isinstance(ask_val, list):
+                ask = safe_string(ask_val, 0)
+                askVolume = safe_string(ask_val, 1)
             else:
-                ask = self.safe_string(ticker, 'ask')
-                askVolume = self.safe_string(ticker, 'askSize')
-        open = self.safe_string(ticker, 'open')
-        close = self.safe_string(ticker, 'close')
-        baseVolume = self.safe_string(ticker, 'amount')
-        quoteVolume = self.safe_string(ticker, 'vol')
+                ask = safe_string(ticker, 'ask')
+                askVolume = safe_string(ticker, 'askSize')
+        open = safe_string(ticker, 'open')
+        close = safe_string(ticker, 'close')
+        baseVolume = safe_string(ticker, 'amount')
+        quoteVolume = safe_string(ticker, 'vol')
+        # Batch construction to avoid global lookups
         return self.safe_ticker({
             'symbol': symbol,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'high': self.safe_string(ticker, 'high'),
-            'low': self.safe_string(ticker, 'low'),
+            'high': safe_string(ticker, 'high'),
+            'low': safe_string(ticker, 'low'),
             'bid': bid,
             'bidVolume': bidVolume,
             'ask': ask,
