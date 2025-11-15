@@ -1228,13 +1228,29 @@ class hyperliquid(Exchange, ImplicitAPI):
         #         "v": "591.6427"
         #     }
         #
+        #
+        #     {
+        #         "T": 1704287699999,
+        #         "c": "2226.4",
+        #         "h": "2247.9",
+        #         "i": "15m",
+        #         "l": "2224.6",
+        #         "n": 46,
+        #         "o": "2247.9",
+        #         "s": "ETH",
+        #         "t": 1704286800000,
+        #         "v": "591.6427"
+        #     }
+        #
+        safe_integer = self.safe_integer
+        safe_number = self.safe_number
         return [
-            self.safe_integer(ohlcv, 't'),
-            self.safe_number(ohlcv, 'o'),
-            self.safe_number(ohlcv, 'h'),
-            self.safe_number(ohlcv, 'l'),
-            self.safe_number(ohlcv, 'c'),
-            self.safe_number(ohlcv, 'v'),
+            safe_integer(ohlcv, 't'),
+            safe_number(ohlcv, 'o'),
+            safe_number(ohlcv, 'h'),
+            safe_number(ohlcv, 'l'),
+            safe_number(ohlcv, 'c'),
+            safe_number(ohlcv, 'v'),
         ]
 
     async def fetch_trades(self, symbol: Str, since: Int = None, limit: Int = None, params={}):
