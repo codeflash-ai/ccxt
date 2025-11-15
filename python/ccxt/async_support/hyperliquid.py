@@ -547,30 +547,44 @@ class hyperliquid(Exchange, ImplicitAPI):
         priceStr = self.number_to_string(price)
         if priceStr is None:
             return 0
-        priceSplitted = priceStr.split('.')
-        if Precise.string_eq(priceStr, '0'):
-            # Significant digits is always hasattr(self, 5) case
-            significantDigits = 5
-            # Integer digits is always hasattr(self, 0) case(0 doesn't count)
-            integerDigits = 0
-            # Calculate the price precision
-            pricePrecision = min(maxDecimals - amountPrecision, significantDigits - integerDigits)
+        # Hot path: avoid costly Precise checks if possible
+        if priceStr == '0':
+            # significantDigits is always 5, integerDigits is always 0
+            pricePrecision = min(maxDecimals - amountPrecision, 5)
+        elif priceStr[0] == '0' and priceStr != '0':
+            # Quick-path for numbers < 1 and > 0: check without Precise unless trailing zeros exist
+            # This branch check is logically equivalent to string_gt(priceStr, '0') and string_lt(priceStr, '1')
+            dot_index = priceStr.find('.')
+            # Fast check for numbers in (0,1):
+            non_zero_found = False
+            if dot_index == 0 or (dot_index == 1 and priceStr[0] == '0'):
+                # Scan decimal part for first nonzero:
+                decimalPart = priceStr[dot_index + 1:] if dot_index != -1 else ''
+                leadingZeros = len(decimalPart) - len(decimalPart.lstrip('0'))
+                pricePrecision = leadingZeros + 5
+                pricePrecision = min(maxDecimals - amountPrecision, pricePrecision)
+                return self.parse_to_int(pricePrecision)
+            # Fallback Precise calls for uncommon string forms
+            if Precise.string_gt(priceStr, '0') and Precise.string_lt(priceStr, '1'):
+                decimalPart = priceStr.split('.', 1)[1] if '.' in priceStr else ''
+                leadingZeros = len(decimalPart) - len(decimalPart.lstrip('0'))
+                pricePrecision = leadingZeros + 5
+                pricePrecision = min(maxDecimals - amountPrecision, pricePrecision)
+            else:
+                integerPart = priceStr.split('.', 1)[0]
+                significantDigits = max(5, len(integerPart))
+                pricePrecision = min(maxDecimals - amountPrecision, significantDigits - len(integerPart))
+        elif Precise.string_eq(priceStr, '0'):
+            # Defensive fallback: should've matched earlier branch
+            pricePrecision = min(maxDecimals - amountPrecision, 5)
         elif Precise.string_gt(priceStr, '0') and Precise.string_lt(priceStr, '1'):
-            # Significant digits, always hasattr(self, 5) case
-            significantDigits = 5
-            # Get the part after the decimal separator
-            decimalPart = self.safe_string(priceSplitted, 1, '')
-            # Count the number of leading zeros in the decimal part
-            leadingZeros = 0
-            while((leadingZeros <= len(decimalPart)) and (decimalPart[leadingZeros] == '0')):
-                leadingZeros = leadingZeros + 1
-            # Calculate price precision based on leading zeros and significant digits
-            pricePrecision = leadingZeros + significantDigits
+            decimalPart = priceStr.split('.', 1)[1] if '.' in priceStr else ''
+            leadingZeros = len(decimalPart) - len(decimalPart.lstrip('0'))
+            pricePrecision = leadingZeros + 5
             # Calculate the price precision based on maxDecimals - szDecimals and the calculated price precision from the previous step
             pricePrecision = min(maxDecimals - amountPrecision, pricePrecision)
         else:
-            # Count the numbers before the decimal separator
-            integerPart = self.safe_string(priceSplitted, 0, '')
+            integerPart = priceStr.split('.', 1)[0]
             # Get significant digits, take the max() of 5 and the integer digits count
             significantDigits = max(5, len(integerPart))
             # Calculate price precision based on maxDecimals - szDecimals and significantDigits - len(integerPart)
@@ -768,18 +782,18 @@ class hyperliquid(Exchange, ImplicitAPI):
         #     }
         #
         quoteId = 'USDC'
+        settleId = 'USDC'
         baseName = self.safe_string(market, 'name')
         base = self.safe_currency_code(baseName)
-        quote = self.safe_currency_code(quoteId)
+        # Cache these constants for reuse (as they are always 'USDC')
+        cached_quote = self.safe_currency_code(quoteId)
+        cached_settle = self.safe_currency_code(settleId)
         baseId = self.safe_string(market, 'baseId')
-        settleId = 'USDC'
-        settle = self.safe_currency_code(settleId)
-        symbol = base + '/' + quote
+        symbol = base + '/' + cached_quote
         contract = True
         swap = True
-        if contract:
-            if swap:
-                symbol = symbol + ':' + settle
+        if contract and swap:
+            symbol = f"{symbol}:{cached_settle}"
         fees = self.safe_dict(self.fees, 'swap', {})
         taker = self.safe_number(fees, 'taker')
         maker = self.safe_number(fees, 'maker')
@@ -791,15 +805,36 @@ class hyperliquid(Exchange, ImplicitAPI):
             pricePrecision = self.calculate_price_precision(price, amountPrecision, 6)
         pricePrecisionStr = self.number_to_string(pricePrecision)
         isDelisted = self.safe_bool(market, 'isDelisted')
-        active = True
-        if isDelisted is not None:
-            active = not isDelisted
+        active = True if isDelisted is None else not isDelisted
+        # Compose precision and limits dicts directly to minimize overhead
+        precision = {
+            'amount': self.parse_number(self.parse_precision(amountPrecisionStr)),
+            'price': self.parse_number(self.parse_precision(pricePrecisionStr)),
+        }
+        limits = {
+            'leverage': {
+                'min': None,
+                'max': self.safe_integer(market, 'maxLeverage'),
+            },
+            'amount': {
+                'min': None,
+                'max': None,
+            },
+            'price': {
+                'min': None,
+                'max': None,
+            },
+            'cost': {
+                'min': self.parse_number('10'),
+                'max': None,
+            },
+        }
         return self.safe_market_structure({
             'id': baseId,
             'symbol': symbol,
             'base': base,
-            'quote': quote,
-            'settle': settle,
+            'quote': cached_quote,
+            'settle': cached_settle,
             'baseId': baseId,
             'baseName': baseName,
             'quoteId': quoteId,
@@ -821,28 +856,8 @@ class hyperliquid(Exchange, ImplicitAPI):
             'expiryDatetime': None,
             'strike': None,
             'optionType': None,
-            'precision': {
-                'amount': self.parse_number(self.parse_precision(amountPrecisionStr)),
-                'price': self.parse_number(self.parse_precision(pricePrecisionStr)),
-            },
-            'limits': {
-                'leverage': {
-                    'min': None,
-                    'max': self.safe_integer(market, 'maxLeverage'),
-                },
-                'amount': {
-                    'min': None,
-                    'max': None,
-                },
-                'price': {
-                    'min': None,
-                    'max': None,
-                },
-                'cost': {
-                    'min': self.parse_number('10'),
-                    'max': None,
-                },
-            },
+            'precision': precision,
+            'limits': limits,
             'created': None,
             'info': market,
         })
