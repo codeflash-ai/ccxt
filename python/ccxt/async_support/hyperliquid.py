@@ -22,6 +22,15 @@ from ccxt.base.decimal_to_precision import SIGNIFICANT_DIGITS
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
+_HYPERLIQUID_STATUSES = {
+    'triggered': 'open',
+    'filled': 'closed',
+    'open': 'open',
+    'canceled': 'canceled',
+    'rejected': 'rejected',
+    'marginCanceled': 'canceled',
+}
+
 
 class hyperliquid(Exchange, ImplicitAPI):
 
@@ -2568,19 +2577,12 @@ class hyperliquid(Exchange, ImplicitAPI):
     def parse_order_status(self, status: Str):
         if status is None:
             return None
-        statuses: dict = {
-            'triggered': 'open',
-            'filled': 'closed',
-            'open': 'open',
-            'canceled': 'canceled',
-            'rejected': 'rejected',
-            'marginCanceled': 'canceled',
-        }
-        if status.endswith('Rejected'):
-            return 'rejected'
+        # Optimize: check for common suffix first (Canceled > Rejected in line profile)
         if status.endswith('Canceled'):
             return 'canceled'
-        return self.safe_string(statuses, status, status)
+        if status.endswith('Rejected'):
+            return 'rejected'
+        return self.safe_string(_HYPERLIQUID_STATUSES, status, status)
 
     def parse_order_type(self, status):
         statuses: dict = {
